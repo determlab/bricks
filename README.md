@@ -4,29 +4,51 @@
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**A deterministic execution engine for typed Python building blocks. No LLM. No tokens. Same input, same output, every time.**
+> **Status:** alpha (`0.5.x`) — APIs may change between minor versions. PyPI release planned.
+
+**The deterministic execution layer for AI systems. An agent composes a pipeline once; Bricks runs it forever — no LLM in the loop, no tokens per run, same output every time.**
 
 Bricks validates and executes pipelines ("blueprints") built from small, typed, pre-tested
 functions ("bricks"). Blueprints are plain YAML — inspectable, versionable, auditable. The engine
 is pure Python with zero AI dependencies: pydantic, typer, ruamel.yaml, rich. That's it.
+832 tests, `mypy --strict`, and an import-linter contract in CI guarantee it stays that way.
 
-> Looking for the AI layer — composing blueprints from natural language with an LLM?
-> That lives in the companion package [`bricks-ai`](https://github.com/hemipaska-maker/bricks-ai),
-> which builds on this engine. The engine never imports it (enforced by import-linter in CI).
+> Want an LLM to *compose* blueprints from natural language? That's
+> [`bricks-ai`](https://github.com/hemipaska-maker/bricks-ai) — see
+> [Relationship to bricks-ai](#relationship-to-bricks-ai).
 
 ---
+
+## Why Bricks?
+
+LLM agents are good at deciding *what* to do — and unreliable at *doing* it the same way
+twice. Every run costs tokens, every retry can produce different output, and nobody can
+audit a pipeline that might improvise.
+
+Bricks splits the work: an LLM (or a human) composes a pipeline **once**, then the engine
+runs it forever with no model in the loop. Zero tokens per run. Same output, every run.
+
+**"I could just write a Python script."** You could — but a blueprint is what a script
+can't be: data instead of code. It's validated against typed brick signatures *before* it
+runs, diffed and versioned like config, and executed step-by-step with errors attributed
+to the exact brick that failed. A script does what it does; a blueprint can show what it
+will do before it does it.
 
 ## Install
 
 ```bash
-pip install -e .            # from a clone; PyPI release TBD
+git clone https://github.com/hemipaska-maker/bricks.git
+cd bricks
+pip install -e .        # PyPI release planned
 ```
 
 The base install ships:
 
-- The execution engine: blueprint loading, validation (AST whitelist for DSL), DAG execution
+- The execution engine: blueprint loading, DAG execution, and validation — DSL expressions
+  are checked against an AST whitelist, so blueprints can't smuggle in arbitrary code
 - **100 stdlib bricks** (data, string, math, date/time, validation, list ops, encoding)
-- The blueprint store (file/memory cache)
+- The blueprint store — caches validated blueprints (file or in-memory) so repeated tasks
+  reuse a known-good pipeline instead of rebuilding it
 - The `bricks` CLI
 
 ## Quick Start — Python API
@@ -34,9 +56,18 @@ The base install ships:
 ```python
 from bricks import run_blueprint
 
-result = run_blueprint("blueprints/crm_pipeline.yaml", inputs={"data": customers})
+crm_json = """[
+  {"name": "Acme",    "status": "active",  "monthly_revenue": 4200},
+  {"name": "Globex",  "status": "churned", "monthly_revenue": 1800},
+  {"name": "Initech", "status": "active",  "monthly_revenue": 3100}
+]"""
+
+result = run_blueprint("blueprints/crm_pipeline.yaml", inputs={"crm_json": crm_json})
 print(result.outputs)
+# {'active_count': 2, 'total_active_revenue': 7300, 'avg_active_revenue': 3650.0}
 ```
+
+Run it a thousand times — same three numbers, every time. That's the point.
 
 Or with an explicit registry:
 
@@ -50,13 +81,14 @@ result = run_blueprint(yaml_string, inputs={...}, registry=registry)
 ## Quick Start — CLI
 
 ```bash
-bricks run blueprints/crm_pipeline.yaml -i data='[...]'   # execute a blueprint
-bricks check blueprints/crm_pipeline.yaml                 # validate without executing
-bricks dry-run blueprints/crm_pipeline.yaml               # full dry-run
-bricks list                                               # list registered bricks
-bricks new brick my_brick                                 # scaffold a brick
-bricks store seed blueprints/                             # seed the blueprint cache
+bricks run blueprints/crm_pipeline.yaml -i crm_json='[...]'   # execute a blueprint
+bricks check blueprints/crm_pipeline.yaml                     # validate without executing
+bricks list                                                   # list registered bricks
+bricks new brick my_brick                                     # scaffold a brick
+bricks store seed blueprints/                                 # seed the blueprint cache
 ```
+
+> `bricks dry-run` is currently an alias for `check`.
 
 Example blueprints live in [blueprints/](blueprints/).
 
@@ -80,15 +112,17 @@ Write pipelines as Python instead of YAML — the `@flow` decorator traces the f
 builds a DAG:
 
 ```python
-from bricks import step, for_each, branch, flow
+from bricks import step, flow
 
 @flow
-def clean_pipeline(data):
-    cleaned = step.clean(text=data)
-    return step.summarize(text=cleaned)
+def active_revenue(crm_json):
+    parsed   = step.extract_json_from_str(text=crm_json)
+    active   = step.filter_dict_list(items=parsed.output, key="status", value="active")
+    revenues = step.map_values(items=active.output, key="monthly_revenue")
+    return step.reduce_sum(values=revenues.output)
 
-blueprint = clean_pipeline.to_blueprint()   # → BlueprintDefinition
-yaml_str  = clean_pipeline.to_yaml()        # → YAML string
+blueprint = active_revenue.to_blueprint()   # → BlueprintDefinition
+yaml_str  = active_revenue.to_yaml()        # → the same YAML you'd write by hand
 ```
 
 ## Community Packs
