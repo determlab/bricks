@@ -46,7 +46,7 @@ The base install ships:
 
 - The execution engine: blueprint loading, DAG execution, and validation — DSL expressions
   are checked against an AST whitelist, so blueprints can't smuggle in arbitrary code
-- **100 stdlib bricks** (data, string, math, date/time, validation, list ops, encoding)
+- **101 stdlib bricks** (data, string, math, date/time, validation, list ops, encoding)
 - The blueprint store — caches validated blueprints (file or in-memory) so repeated tasks
   reuse a known-good pipeline instead of rebuilding it
 - The `bricks` CLI

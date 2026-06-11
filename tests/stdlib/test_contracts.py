@@ -69,6 +69,12 @@ _OVERRIDE_INPUTS: dict[str, dict[str, Any]] = {
     "escape_special_chars": {"text": "hello.world", "chars": ["."]},
     "mask_string": {"text": "secret-api-key-12345"},
     # data_transformation
+    "aggregate_by_key": {
+        "items": [{"cat": "a", "n": 1.0}, {"cat": "a", "n": 2.0}, {"cat": "b", "n": 5.0}],
+        "group_key": "cat",
+        "value_field": "n",
+        "operation": "sum",
+    },
     "filter_dict_list": {"items": [{"k": "v"}, {"k": "x"}], "key": "k", "value": "v"},
     "validate_json_schema": {"data": {"name": "test"}, "schema": {"required": ["name"]}},
     "merge_dictionaries": {"base": {"a": 1}, "override": {"b": 2}},

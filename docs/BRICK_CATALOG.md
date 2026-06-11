@@ -1,10 +1,41 @@
 # Brick Catalog (Auto-Generated)
 
-Generated: 2026-04-05
+Generated: 2026-06-12
 
-This catalog documents all 100 available stdlib bricks. Each brick returns a dictionary with a `result` key.
+This catalog documents all 101 available stdlib bricks. Each brick returns a dictionary with a `result` key.
 
 ## Data Transformation
+
+### aggregate_by_key
+
+Group dicts by a field and aggregate a numeric field per group. Returns {result: {group: value}}.
+
+    Args:
+        items: List of dicts.
+        group_key: Field whose value names each group.
+        value_field: Numeric field to aggregate within each group.
+        operation: One of ``"sum"``, ``"avg"``, ``"min"``, ``"max"``, ``"count"``.
+
+    Returns:
+        dict with key ``result`` mapping each group value to its aggregate.
+
+    Raises:
+        ValueError: If operation is not recognized.
+
+
+**Tags:** `aggregate`, `data`, `group`
+
+**Input:**
+
+- `items` (list[dict[str, Any]]): List of dicts.
+- `group_key` (str): Field whose value names each group.
+- `value_field` (str): Numeric field to aggregate within each group.
+- `operation` (str): One of ``"sum"``, ``"avg"``, ``"min"``, ``"max"``, ``"count"``.
+
+**Output:**
+
+- `result` (dict[str, dict[str, float]]): dict with key ``result`` mapping each group value to its aggregate.
+
 
 ### calculate_aggregates
 

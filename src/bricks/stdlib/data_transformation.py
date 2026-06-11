@@ -1,4 +1,4 @@
-"""Data Transformation bricks — 25 bricks for JSON, CSV, XML, and dict operations."""
+"""Data Transformation bricks — 26 bricks for JSON, CSV, XML, and dict operations."""
 
 from __future__ import annotations
 
@@ -292,6 +292,44 @@ def calculate_aggregates(
     if operation not in ops:
         raise ValueError(f"Unknown operation {operation!r}. Use: sum, avg, min, max, count")
     return {"result": float(ops[operation](values))}
+
+
+@brick(tags=["data", "aggregate", "group"], category="data_transformation", destructive=False)
+def aggregate_by_key(
+    items: list[dict[str, Any]],
+    group_key: str,
+    value_field: str,
+    operation: Literal["sum", "avg", "min", "max", "count"],
+) -> dict[str, dict[str, float]]:
+    """Group dicts by a field and aggregate a numeric field per group. Returns {result: {group: value}}.
+
+    Args:
+        items: List of dicts.
+        group_key: Field whose value names each group.
+        value_field: Numeric field to aggregate within each group.
+        operation: One of ``"sum"``, ``"avg"``, ``"min"``, ``"max"``, ``"count"``.
+
+    Returns:
+        dict with key ``result`` mapping each group value to its aggregate.
+
+    Raises:
+        ValueError: If operation is not recognized.
+    """
+    ops: dict[str, Any] = {
+        "sum": sum,
+        "avg": lambda v: sum(v) / len(v),
+        "min": min,
+        "max": max,
+        "count": len,
+    }
+    if operation not in ops:
+        raise ValueError(f"Unknown operation {operation!r}. Use: sum, avg, min, max, count")
+    groups: dict[str, list[float]] = {}
+    for item in items:
+        if value_field not in item:
+            continue
+        groups.setdefault(str(item.get(group_key, "")), []).append(float(item[value_field]))
+    return {"result": {name: float(ops[operation](values)) for name, values in groups.items()}}
 
 
 @brick(tags=["data", "join", "list"], category="data_transformation", destructive=False)

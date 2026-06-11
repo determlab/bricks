@@ -1,10 +1,11 @@
-"""Tests for bricks/stdlib/data_transformation.py — 25 tests."""
+"""Tests for bricks/stdlib/data_transformation.py."""
 
 from __future__ import annotations
 
 import pytest
 
 from bricks.stdlib.data_transformation import (
+    aggregate_by_key,
     calculate_aggregates,
     cast_data_types,
     convert_to_csv_str,
@@ -121,6 +122,43 @@ def test_calculate_aggregates_sum() -> None:
 def test_calculate_aggregates_unknown_op_raises() -> None:
     with pytest.raises(ValueError):
         calculate_aggregates([{"v": 1}], "v", "median")
+
+
+def test_aggregate_by_key_sum_per_group() -> None:
+    items = [
+        {"region": "eu", "revenue": 100.0},
+        {"region": "us", "revenue": 50.0},
+        {"region": "eu", "revenue": 25.0},
+    ]
+    result = aggregate_by_key(items, "region", "revenue", "sum")["result"]
+    assert result == {"eu": pytest.approx(125.0), "us": pytest.approx(50.0)}
+
+
+def test_aggregate_by_key_avg_per_group() -> None:
+    items = [{"t": "a", "n": 2.0}, {"t": "a", "n": 4.0}, {"t": "b", "n": 9.0}]
+    result = aggregate_by_key(items, "t", "n", "avg")["result"]
+    assert result == {"a": pytest.approx(3.0), "b": pytest.approx(9.0)}
+
+
+def test_aggregate_by_key_count_per_group() -> None:
+    items = [{"t": "a", "n": 1}, {"t": "a", "n": 1}, {"t": "b", "n": 1}]
+    result = aggregate_by_key(items, "t", "n", "count")["result"]
+    assert result == {"a": 2.0, "b": 1.0}
+
+
+def test_aggregate_by_key_skips_items_missing_value_field() -> None:
+    items = [{"t": "a", "n": 1.0}, {"t": "a"}, {"t": "b"}]
+    result = aggregate_by_key(items, "t", "n", "sum")["result"]
+    assert result == {"a": pytest.approx(1.0)}
+
+
+def test_aggregate_by_key_empty_items_returns_empty_dict() -> None:
+    assert aggregate_by_key([], "t", "n", "sum")["result"] == {}
+
+
+def test_aggregate_by_key_unknown_op_raises() -> None:
+    with pytest.raises(ValueError):
+        aggregate_by_key([{"t": "a", "n": 1.0}], "t", "n", "median")
 
 
 def test_join_lists_on_key_inner_join() -> None:
