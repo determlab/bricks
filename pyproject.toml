@@ -1,0 +1,137 @@
+[project]
+name = "bricks"
+version = "0.5.0-dev"
+description = "Deterministic execution engine: typed Python building blocks composed into auditable pipelines. No LLM required."
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "Hemi", email = "hemipaska@gmail.com" },
+]
+keywords = ["bricks", "deterministic", "workflow", "automation", "pipeline", "dag"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed",
+]
+readme = {file = "README.md", content-type = "text/markdown"}
+
+dependencies = [
+    "pydantic>=2.0",
+    "typer>=0.9",
+    "ruamel.yaml>=0.18",
+    "rich>=13.0",
+    "tzdata>=2024.1; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0",
+    "mypy>=1.8",
+    "ruff>=0.3",
+    "build",
+    "import-linter>=2.0",
+]
+
+[project.scripts]
+bricks = "bricks.cli.main:app"
+
+[project.entry-points."bricks.packs"]
+stdlib = "bricks.stdlib"
+
+[project.urls]
+Homepage = "https://github.com/hemipaska-maker/bricks"
+Repository = "https://github.com/hemipaska-maker/bricks"
+Issues = "https://github.com/hemipaska-maker/bricks/issues"
+Documentation = "https://github.com/hemipaska-maker/bricks#readme"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"bricks" = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+addopts = "--import-mode=importlib"
+pythonpath = ["src"]
+
+# The engine must never import the AI layer (bricks_ai). The CLI's AI
+# commands (compose/demo/serve/playground) import it lazily behind
+# try/except gates so they light up when bricks-ai is installed alongside.
+[tool.importlinter]
+root_packages = ["bricks"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Engine must not import the AI layer"
+type = "forbidden"
+source_modules = ["bricks"]
+forbidden_modules = ["bricks_ai"]
+ignore_imports = [
+    "bricks.cli.main -> bricks_ai",
+]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["ruamel", "ruamel.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["litellm", "litellm.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["uvicorn", "uvicorn.*"]
+ignore_missing_imports = true
+
+# bricks_ai is an optional companion package; the CLI imports it lazily.
+[[tool.mypy.overrides]]
+module = ["bricks_ai", "bricks_ai.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["bricks.cli.check_env"]
+warn_unused_ignores = false
+
+[[tool.mypy.overrides]]
+module = ["bricks.stdlib.*"]
+ignore_errors = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "W",    # pycodestyle warnings
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific rules
+    "C4",   # flake8-comprehensions
+    "PTH",  # flake8-use-pathlib
+    "S",    # flake8-bandit (security)
+    "PLC",  # pylint convention
+    "PLE",  # pylint error
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "PLC0415"]

@@ -1,0 +1,49 @@
+name: crm_reuse
+description: "Parse CRM JSON, filter active accounts, compute revenue metrics."
+inputs:
+  crm_json: "str"
+steps:
+  - name: parse
+    brick: extract_json_from_str
+    params:
+      text: "${crm_json}"
+    save_as: parsed
+
+  - name: filter_active
+    brick: filter_dict_list
+    params:
+      items: "${parsed.result}"
+      key: "status"
+      value: "active"
+    save_as: filtered
+
+  - name: count_active
+    brick: count_dict_list
+    params:
+      items: "${filtered.result}"
+    save_as: count_step
+
+  - name: extract_revenue
+    brick: map_values
+    params:
+      items: "${filtered.result}"
+      key: "monthly_revenue"
+    save_as: revenues
+
+  - name: sum_revenue
+    brick: reduce_sum
+    params:
+      values: "${revenues.result}"
+    save_as: summed
+
+  - name: avg_revenue
+    brick: divide
+    params:
+      a: "${summed.result}"
+      b: "${count_step.result}"
+    save_as: averaged
+
+outputs_map:
+  active_count: "${count_step.result}"
+  total_active_revenue: "${summed.result}"
+  avg_active_revenue: "${averaged.result}"
