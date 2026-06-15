@@ -44,10 +44,10 @@ bricks = "bricks.cli.main:app"
 stdlib = "bricks.stdlib"
 
 [project.urls]
-Homepage = "https://github.com/hemipaska-maker/bricks"
-Repository = "https://github.com/hemipaska-maker/bricks"
-Issues = "https://github.com/hemipaska-maker/bricks/issues"
-Documentation = "https://github.com/hemipaska-maker/bricks#readme"
+Homepage = "https://github.com/determlab/bricks"
+Repository = "https://github.com/determlab/bricks"
+Issues = "https://github.com/determlab/bricks/issues"
+Documentation = "https://github.com/determlab/bricks#readme"
 
 [build-system]
 requires = ["setuptools>=68.0"]

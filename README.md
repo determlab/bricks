@@ -1,6 +1,6 @@
 # Bricks
 
-[![CI](https://github.com/hemipaska-maker/bricks/actions/workflows/ci.yml/badge.svg)](https://github.com/hemipaska-maker/bricks/actions/workflows/ci.yml)
+[![CI](https://github.com/determlab/bricks/actions/workflows/ci.yml/badge.svg)](https://github.com/determlab/bricks/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -37,7 +37,7 @@ will do before it does it.
 ## Install
 
 ```bash
-git clone https://github.com/hemipaska-maker/bricks.git
+git clone https://github.com/determlab/bricks.git
 cd bricks
 pip install -e .        # PyPI release planned
 ```
