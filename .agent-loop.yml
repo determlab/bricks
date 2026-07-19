@@ -1,0 +1,58 @@
+# .agent-loop.yml — per-repo config for the agent-loop autopilot.
+# `/agent-loop:init` generates this with detected values. Commit it. Edit freely.
+version: 1
+
+# Branch the loop targets and PRs against.
+branch_base: main
+
+# Max CODER<->REVIEWER rounds before the loop gives up and flags a human.
+max_rounds: 4
+
+# Merge behaviour when the reviewer PASSES.
+#   auto_merge: true  -> arm GitHub auto-merge (merges only when required CI is green)
+#   auto_merge: false -> stop at "ready to merge"; a human merges
+# NOTE: auto-merge is REFUSED unless branch protection has a required status check.
+auto_merge: true
+merge_method: squash        # squash | merge | rebase
+
+# Commands the coder/reviewer run. Detected from pyproject.toml + .github/workflows/ci.yml
+# (ruff check + ruff format --check + mypy --strict on src/bricks + import-linter + pytest).
+commands:
+  install: "pip install -e \".[dev]\""
+  test:    "python -m pytest"
+  lint:    "ruff check . && ruff format --check . && mypy src/bricks && lint-imports"
+  build:   "python -m build"
+
+# What forces a human flag (see reference/hard-stops.md). Tune per repo.
+hard_stops:
+  # Editing any of these = a dependency change -> flag.
+  dependency_files:
+    - pyproject.toml
+    - requirements*.txt
+    - package.json
+    - go.mod
+    - Cargo.toml
+  # Globs that are genuinely security-sensitive -> flag if touched.
+  # Recalibrated 2026-07-19 (determlab work-method v1.0): risky = OUTSIDE the
+  # issue's DoD rubric, not "matches a category". The old "**/*schema*" glob is
+  # gone — SHAL ships typed tool schemas; that glob flagged half the codebase.
+  protected_paths:
+    - "**/auth/**"
+    - "**/security/**"
+    - "**/migrations/**"
+    - "**/approval.py"        # the actuation gate — the product's trust core
+    - "**/redact*"            # secret-redaction helpers
+    - "**/.env*"
+  # Deleting a file the branch didn't create -> flag.
+  flag_on_file_delete: true
+  # Pre-1.0 (0.x semver, no external users): in-rubric public-API edits are
+  # ALLOWED; the reviewer verifies a CHANGELOG.md note instead of flagging.
+  # Out-of-rubric API changes still fail review on the Spec axis.
+  flag_on_public_api_change: false
+
+# What the reviewer reads.
+review:
+  standards_sources:          # the "Standards" axis (no AGENTS.md in bricks yet — add one and list it here)
+    - README.md
+    - docs/
+  spec_source: issue          # the "Spec" axis = the originating issue
