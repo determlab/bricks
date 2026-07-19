@@ -12,7 +12,7 @@ max_rounds: 4
 #   auto_merge: true  -> arm GitHub auto-merge (merges only when required CI is green)
 #   auto_merge: false -> stop at "ready to merge"; a human merges
 # NOTE: auto-merge is REFUSED unless branch protection has a required status check.
-auto_merge: true
+auto_merge: false   # founder decision 2026-07-19: ALL PRs need founder approval before merge
 merge_method: squash        # squash | merge | rebase
 
 # Commands the coder/reviewer run. Detected from pyproject.toml + .github/workflows/ci.yml
