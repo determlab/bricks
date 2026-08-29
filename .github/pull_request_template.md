@@ -16,8 +16,10 @@ Closes #<!-- issue number -->
 - [ ] Docs updated: project hub / status refreshed; superseded docs archived
 
 ## Architecture consistency
-<!-- docs/ARCHITECTURE.md is the north star (Decision Ledger D1–D15). -->
-- [ ] Consistent with `docs/ARCHITECTURE.md` — **or** this PR amends the Decision Ledger (note which `D##`)
+<!-- bricks has no ARCHITECTURE.md; the engine invariants live in README.md. -->
+- [ ] No LLM reaches the execute path (the import-linter contract still passes)
+- [ ] Output is deterministic for the same inputs: no clock, no RNG, no hash-order dependence
+- [ ] A public API change, if any, is recorded in `CHANGELOG.md`
 
 ## Reviewer verdict
 <!-- agent-loop: PASS | CHANGES (n) | (flagged). Rounds used: r / max. -->
