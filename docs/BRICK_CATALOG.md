@@ -190,7 +190,8 @@ Compute the diff between two dicts. Returns {result: diff}.
 
     Returns:
         dict with key ``result`` containing a dict with ``added``, ``removed``,
-        and ``changed`` entries.
+        and ``changed`` entries. Each entry lists its keys in ascending sorted
+        order, so the output is reproducible across runs.
 
 
 **Tags:** `data`, `dict`, `diff`
