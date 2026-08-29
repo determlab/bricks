@@ -173,6 +173,21 @@ def test_diff_dict_objects_detects_changes() -> None:
     assert "a" in diff["changed"]
 
 
+def test_diff_dict_objects_orders_keys_deterministically() -> None:
+    # Keys are inserted in reverse order so that a hash-ordered implementation
+    # would only produce sorted output by chance (1 in 8! per sub-dict).
+    changed_keys = [f"c{i}" for i in range(8)]
+    removed_keys = [f"r{i}" for i in range(8)]
+    added_keys = [f"a{i}" for i in range(8)]
+    old = dict.fromkeys(reversed(changed_keys + removed_keys), 1)
+    new = dict.fromkeys(reversed(changed_keys + added_keys), 2)
+    diff = diff_dict_objects(old, new)["result"]
+    assert list(diff["added"]) == added_keys
+    assert list(diff["removed"]) == removed_keys
+    assert list(diff["changed"]) == changed_keys
+    assert diff_dict_objects(old, new)["result"] == diff
+
+
 def test_parse_xml_to_dict_parses_element() -> None:
     xml = "<root><item>hello</item></root>"
     result = parse_xml_to_dict(xml)["result"]

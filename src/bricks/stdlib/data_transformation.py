@@ -367,9 +367,10 @@ def diff_dict_objects(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any
 
     Returns:
         dict with key ``result`` containing a dict with ``added``, ``removed``,
-        and ``changed`` entries.
+        and ``changed`` entries. Each entry lists its keys in ascending sorted
+        order, so the output is reproducible across runs.
     """
-    all_keys = set(old) | set(new)
+    all_keys = sorted(set(old) | set(new))
     added = {k: new[k] for k in all_keys if k not in old}
     removed = {k: old[k] for k in all_keys if k not in new}
     changed = {k: {"old": old[k], "new": new[k]} for k in all_keys if k in old and k in new and old[k] != new[k]}
