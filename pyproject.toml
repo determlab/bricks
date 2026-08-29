@@ -32,7 +32,7 @@ dependencies = [
 dev = [
     "pytest>=9.0",
     "mypy>=1.8",
-    "ruff>=0.3",
+    "ruff>=0.3,<0.17",
     "build",
     "import-linter>=2.0",
 ]
@@ -114,6 +114,12 @@ ignore_errors = true
 [tool.ruff]
 target-version = "py310"
 line-length = 120
+
+[tool.ruff.format]
+# Markdown code blocks are hand-authored documentation, not source. They use
+# deliberate column alignment and compact spacing that the formatter would
+# collapse, so `ruff format` leaves prose files alone.
+exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = [
