@@ -17,8 +17,9 @@ reviewed: 2026-06-15
 
 Bricks validates and executes pipelines ("blueprints") built from small, typed, pre-tested
 functions ("bricks"). Blueprints are plain YAML — inspectable, versionable, auditable. The engine
-is pure Python with zero AI dependencies: pydantic, typer, ruamel.yaml, rich. That's it.
-832 tests, `mypy --strict`, and an import-linter contract in CI guarantee it stays that way.
+is pure Python with **zero AI dependencies** — a handful of ordinary packages, listed in
+[`pyproject.toml`](pyproject.toml). A full test suite, `mypy --strict`, and an import-linter
+contract in CI keep it that way.
 
 > Want an LLM to *compose* blueprints from natural language? That's
 > [`bricks-ai`](https://github.com/hemipaska-maker/bricks-ai) — see
@@ -51,9 +52,12 @@ pip install -e .        # PyPI release planned
 
 The base install ships:
 
-- The execution engine: blueprint loading, DAG execution, and validation — DSL expressions
-  are checked against an AST whitelist, so blueprints can't smuggle in arbitrary code
-- **101 stdlib bricks** (data, string, math, date/time, validation, list ops, encoding)
+- The execution engine: blueprint loading, DAG execution, and validation
+- An AST whitelist (`PythonDSLValidator`) for validating machine-authored blueprint DSL
+  — ⚠️ **it does not cover the `guard` step.** A `condition:` is evaluated directly, so
+  today a blueprint is only as trusted as whoever wrote it. Treat blueprints as code you
+  review, not as inert data. Tracked in [#17](https://github.com/determlab/bricks/issues/17)
+- A stdlib of typed, pre-tested bricks (data, string, math, date/time, validation, list ops, encoding)
 - The blueprint store — caches validated blueprints (file or in-memory) so repeated tasks
   reuse a known-good pipeline instead of rebuilding it
 - The `bricks` CLI
