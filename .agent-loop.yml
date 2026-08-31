@@ -53,6 +53,7 @@ hard_stops:
 # What the reviewer reads.
 review:
   standards_sources:          # the "Standards" axis (no AGENTS.md in bricks yet — add one and list it here)
+    - docs/DECISIONS.md       # the Decision Ledger — a PR that breaks a locked D# fails Standards
     - README.md
     - docs/
   spec_source: issue          # the "Spec" axis = the originating issue
