@@ -25,6 +25,7 @@ dependencies = [
     "typer>=0.9",
     "ruamel.yaml>=0.18",
     "rich>=13.0",
+    "pluggy>=1.0",
     "tzdata>=2024.1; sys_platform == 'win32'",
 ]
 
