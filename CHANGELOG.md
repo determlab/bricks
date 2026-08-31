@@ -2,7 +2,7 @@
 type: changelog
 owner: repo-agent
 scope: repo/bricks
-reviewed: 2026-08-30
+reviewed: 2026-09-01
 ---
 
 # Changelog
@@ -15,6 +15,14 @@ Pre-1.0: the public API may change in a minor release. `.agent-loop.yml` sets
 `flag_on_public_api_change: false` on that basis, and the reviewer verifies an
 entry here instead — so an in-rubric change that alters the public surface must
 be recorded below.
+
+That policy was unenforced until 2026-09-01. agent-loop 0.1.0 wrote the key into
+every repo and read it nowhere, so the switch was set to `false` and no code
+consulted it either way; the only thing between a public-API change and `main`
+was the reviewer's own judgement (bricks#20). Plugin 0.2.0 implements it: the
+reviewer skips the public-API hard-stop category when the key is `false`, and
+says so in its verdict so a silent PASS is not read as "no API change". The
+policy above holds from 0.2.0 onward.
 
 ## [Unreleased]
 

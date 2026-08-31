@@ -2,7 +2,7 @@
 type: agent-context
 owner: repo-agent
 scope: repo/bricks
-reviewed: 2026-08-31
+reviewed: 2026-09-01
 ---
 
 # Bricks — context for the coder and the reviewer
@@ -10,6 +10,12 @@ reviewed: 2026-08-31
 Read this and [`docs/DECISIONS.md`](../DECISIONS.md) before touching anything.
 The ledger is the authority; this file is the short version, plus what the code
 actually looks like today.
+
+This file is repo-specific by design. The part of the role that is the same in
+every product repo — what the repo agent owns, why verifiability rather than
+seniority decides that, and the one file it may never change on its own say-so —
+is the role charter at `ops/agents/repo-agent.md` in `determlab/ops`. It is not
+in this repo and not vendored here; read it there.
 
 ## What this is
 
