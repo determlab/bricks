@@ -1,3 +1,10 @@
+---
+type: changelog
+owner: repo-agent
+scope: repo/bricks
+reviewed: 2026-08-30
+---
+
 # Changelog
 
 All notable changes to this project are documented here. The format follows

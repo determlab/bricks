@@ -1,3 +1,10 @@
+---
+type: readme
+owner: CMO
+scope: repo/bricks
+reviewed: 2026-06-15
+---
+
 # Bricks
 
 [![CI](https://github.com/determlab/bricks/actions/workflows/ci.yml/badge.svg)](https://github.com/determlab/bricks/actions/workflows/ci.yml)

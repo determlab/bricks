@@ -34,8 +34,8 @@ hard_stops:
     - Cargo.toml
   # Globs that are genuinely security-sensitive -> flag if touched.
   # Recalibrated 2026-07-19 (determlab work-method v1.0): risky = OUTSIDE the
-  # issue's DoD rubric, not "matches a category". The old "**/*schema*" glob is
-  # gone — SHAL ships typed tool schemas; that glob flagged half the codebase.
+  # issue's DoD rubric, not "matches a category". A glob that fires on ordinary
+  # engine work teaches everyone to ignore the flag, so keep this list narrow.
   protected_paths:
     - "**/auth/**"
     - "**/security/**"
@@ -52,7 +52,7 @@ hard_stops:
 
 # What the reviewer reads.
 review:
-  standards_sources:          # the "Standards" axis (no AGENTS.md in bricks yet — add one and list it here)
+  standards_sources:          # the "Standards" axis. docs/ below covers docs/agents/context.md, the working-context file
     - docs/DECISIONS.md       # the Decision Ledger — a PR that breaks a locked D# fails Standards
     - README.md
     - docs/
