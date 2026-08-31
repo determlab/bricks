@@ -51,7 +51,8 @@ hard_stops:
     - "src/bricks/core/discovery.py"             # loads arbitrary modules from a file path
     - "src/bricks/packs.py"                      # imports whatever declares a bricks.packs entry point (D7)
     - "src/bricks/core/registry.py"              # what may execute at all
-    - "src/bricks/core/validation.py"            # the pre-execution check D8 rests on
+    - "src/bricks/core/loader.py"                # ruamel YAML() is round-trip mode; D4 ("a blueprint is data, not code") rests on it staying that way
+    - "src/bricks/core/validation.py"            # BlueprintValidator: the pre-execution check, and what G6/G8 are about
     - "src/bricks/api.py"                        # run_blueprint: the validate-before-execute boundary
     - "src/bricks/stdlib/encoding_security.py"   # compute_hash, random_string, mask_string — the real target of the old "**/redact*"
   # Deleting a file the branch didn't create -> flag.
