@@ -26,6 +26,11 @@ policy above holds from 0.2.0 onward.
 
 ## [Unreleased]
 
+### Fixed
+- `pluggy` is now a declared runtime dependency. `import bricks.core.hooks`
+  raised `ModuleNotFoundError` on a plain (non-`[dev]`) install, because
+  pluggy only reached environments transitively through `pytest`. (#9)
+
 ## [0.5.0] - 2026-06-12
 
 First tagged state of the engine after the bricks / bricks-ai split. Not

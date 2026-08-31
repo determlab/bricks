@@ -114,8 +114,9 @@ These are the `commands:` block in `.agent-loop.yml`, and they match
 - New behaviour comes with a test; a bug fix comes with the test that would
   have caught it.
 - No new runtime dependency. The engine's runtime dependencies are pydantic,
-  typer, ruamel.yaml, rich, and tzdata (Windows only, timezone data for the
-  date_time bricks); editing `pyproject.toml` is a hard stop.
+  typer, ruamel.yaml, rich, pluggy (the hook system in core/hooks.py), and
+  tzdata (Windows only, timezone data for the date_time bricks); editing
+  `pyproject.toml` is a hard stop.
 - A change to the public surface gets a `CHANGELOG.md` entry under
   `[Unreleased]` (D10).
 - If the work would settle, contradict, or supersede a `D#`, or would close a
