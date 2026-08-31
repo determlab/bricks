@@ -1,3 +1,10 @@
+---
+type: ledger
+owner: repo-agent
+scope: repo/bricks
+reviewed: 2026-08-30
+---
+
 # bricks — Decision Ledger
 
 Locked architectural decisions. **Append; never silently re-litigate.**

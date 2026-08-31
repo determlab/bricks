@@ -1,3 +1,10 @@
+---
+type: standard
+owner: repo-agent
+scope: repo/bricks
+reviewed: 2026-06-11
+---
+
 # Brick Description Style Guide
 
 Rules for writing LLM-optimized brick descriptions:
