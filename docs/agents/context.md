@@ -2,7 +2,7 @@
 type: agent-context
 owner: repo-agent
 scope: repo/bricks
-reviewed: 2026-09-01
+reviewed: 2026-09-03
 ---
 
 # Bricks — context for the coder and the reviewer
@@ -55,18 +55,46 @@ them — and do not delete them in passing either, because O6 is still open.
 Each cites its ledger row. Breaking one fails review on the Standards axis.
 
 - **The engine never imports `bricks_ai`** (D2, D3). Two things enforce it and
-  both fail the build: the import-linter contract in `pyproject.toml` and
-  `tests/core/test_no_ai_imports.py`. The dependency is one-way, always.
-- **A blueprint is data, not code** (D4). Loading one never imports or executes
-  caller-supplied Python.
+  both fail the build: the import-linter contract at `pyproject.toml:77-84`
+  (`type = "forbidden"`, `source_modules = ["bricks"]`, `forbidden_modules =
+  ["bricks_ai"]`, with one recorded exemption at `:82-84` for the CLI's gated
+  import), and two subprocess tests —
+  `tests/core/test_no_ai_imports.py:30` (`test_import_bricks_loads_no_ai_modules`)
+  and `:46` (`test_import_engine_cli_loads_no_ai_modules`). The dependency is
+  one-way, always.
+- **A blueprint is data, not code** (D4). *Loading* one never imports or
+  executes caller-supplied Python: `src/bricks/core/loader.py:45` builds
+  ruamel's round-trip `YAML()`, not `typ="unsafe"`, so no YAML tag can
+  construct an arbitrary Python object. Loading is the whole of that
+  guarantee — at run time a guard condition still reaches a bare `eval()`
+  (G4, see the next section).
 - **A brick is a plain typed function returning a dict** (D5). No base class to
   inherit, no framework types in the signature. Descriptions follow
   [`src/bricks/BRICK_STYLE_GUIDE.md`](../../src/bricks/BRICK_STYLE_GUIDE.md).
 - **Execution is sequential; the DAG is compile-time only** (D6).
-- **A failure names the step and the brick that caused it** (D8) — see
-  `core/exceptions.py`. Never a pipeline-level "something failed".
-- **Third-party bricks arrive through the `bricks.packs` entry point** (D7). The
-  engine does not scan paths and does not import by name.
+- **A failure names the step and the brick that caused it** (D8) —
+  `BrickExecutionError` at `src/bricks/core/exceptions.py:50`, whose message is
+  built from `brick_name` and `step_name` at `:57`. Never a pipeline-level
+  "something failed".
+- **Third-party bricks arrive through the `bricks.packs` entry point** (D7).
+  The registry `run_blueprint()` builds for itself is assembled that way and no
+  other — a caller may still hand it a different one via the `registry=`
+  parameter. `run_blueprint()` calls `build_default_registry()` at
+  `src/bricks/api.py:78`, which calls `discover_and_load()` at `:46`; that
+  iterates the `bricks.packs` entry-point group at `src/bricks/packs.py:27`.
+  That path scans no directories.
+  **The CLI is a second path, and it does scan.** `_setup_registry()` at
+  `src/bricks/cli/main.py:50-59` calls `discovery.discover_package(p)` or
+  `discovery.discover_path(p)` for each entry in `config.registry.paths`, and
+  `discover_path` executes the file it finds —
+  `src/bricks/core/discovery.py:68-72`, `spec_from_file_location(...)` then
+  `spec.loader.exec_module(module)`. It is gated on
+  `config.registry.auto_discover`, which is `False` by default
+  (`src/bricks/core/config.py:19`) and is turned on by a `bricks.config.yaml`.
+  So a default install scans nothing; a configured one imports and runs Python
+  from the paths it is given. Whether that second path belongs inside D7 or is
+  a gap is **an open question, tracked in determlab/bricks#27** — describe it,
+  do not settle it.
 - **`mypy --strict` on `src/bricks`** (D9). `bricks.stdlib.*` is exempt today
   (G7) — that is a recorded debt, not a licence to add more exempt code.
 - **Pre-1.0 the public API may change in a minor release** (D10) — the price is
@@ -83,9 +111,14 @@ The two you are most likely to trip over:
 
 - YAML guard conditions reach a bare `eval()` (`core/engine.py:346`, builtins
   emptied). So a blueprint is data everywhere *except* there (G4, open as O2).
-- `run_blueprint()` validates before it runs; the CLI's `bricks run` builds the
-  engine directly and does not (G8, open as O3). Same operation, two different
-  guarantees. Do not align them under an unrelated issue.
+- `run_blueprint()` validates before it runs —
+  `BlueprintValidator(registry=reg).validate(blueprint)` at
+  `src/bricks/api.py:86`; the CLI's `bricks run` builds the engine directly and
+  does not — `BlueprintEngine(registry=registry)` at
+  `src/bricks/cli/main.py:242`, with no validator call in that command.
+  `BlueprintValidator` is constructed only at `:194` and `:290`, inside the
+  `check` and `dry-run` commands (G8, open as O3). Same operation, two
+  different guarantees. Do not align them under an unrelated issue.
 
 `README.md` also makes two claims the code does not keep — pre-flight type
 checking (G6) and an AST whitelist covering blueprints (G5). Both are recorded.
