@@ -77,10 +77,12 @@ Each cites its ledger row. Breaking one fails review on the Standards axis.
   built from `brick_name` and `step_name` at `:57`. Never a pipeline-level
   "something failed".
 - **Third-party bricks arrive through the `bricks.packs` entry point** (D7).
-  `run_blueprint()` builds its registry that way and no other:
-  `src/bricks/api.py:46` calls `discover_and_load()`, which iterates the
-  `bricks.packs` entry-point group at `src/bricks/packs.py:27`. That path scans
-  no directories.
+  The registry `run_blueprint()` builds for itself is assembled that way and no
+  other — a caller may still hand it a different one via the `registry=`
+  parameter. `run_blueprint()` calls `build_default_registry()` at
+  `src/bricks/api.py:78`, which calls `discover_and_load()` at `:46`; that
+  iterates the `bricks.packs` entry-point group at `src/bricks/packs.py:27`.
+  That path scans no directories.
   **The CLI is a second path, and it does scan.** `_setup_registry()` at
   `src/bricks/cli/main.py:50-59` calls `discovery.discover_package(p)` or
   `discovery.discover_path(p)` for each entry in `config.registry.paths`, and
@@ -109,9 +111,14 @@ The two you are most likely to trip over:
 
 - YAML guard conditions reach a bare `eval()` (`core/engine.py:346`, builtins
   emptied). So a blueprint is data everywhere *except* there (G4, open as O2).
-- `run_blueprint()` validates before it runs; the CLI's `bricks run` builds the
-  engine directly and does not (G8, open as O3). Same operation, two different
-  guarantees. Do not align them under an unrelated issue.
+- `run_blueprint()` validates before it runs —
+  `BlueprintValidator(registry=reg).validate(blueprint)` at
+  `src/bricks/api.py:86`; the CLI's `bricks run` builds the engine directly and
+  does not — `BlueprintEngine(registry=registry)` at
+  `src/bricks/cli/main.py:242`, with no validator call in that command.
+  `BlueprintValidator` is constructed only at `:194` and `:290`, inside the
+  `check` and `dry-run` commands (G8, open as O3). Same operation, two
+  different guarantees. Do not align them under an unrelated issue.
 
 `README.md` also makes two claims the code does not keep — pre-flight type
 checking (G6) and an AST whitelist covering blueprints (G5). Both are recorded.
