@@ -26,6 +26,43 @@ policy above holds from 0.2.0 onward.
 
 ## [Unreleased]
 
+### Changed
+- **A `type: guard` step names a brick instead of carrying a Python
+  expression.** The engine no longer calls `eval` on anything from a
+  blueprint: it looks the brick up in the registry, calls it with the step's
+  resolved `params`, and takes the truthiness of its result — the same rule
+  `__branch__` already applies to `condition_brick`. `src/bricks/core/` now
+  contains no `eval(` and no `exec(`, and CI greps for it. (#17, RFC-002, D13)
+
+  A guard whose predicate *raises* now fails with `BrickExecutionError` naming
+  that brick and step (D8), not `GuardFailedError`. Teardown now runs for guard
+  steps — on the guard's own brick first, then in reverse order over the steps
+  already completed — for both a raised predicate and a failed guard.
+
+  `GuardFailedError.__init__` takes `brick_name=` in place of `condition=`, and
+  the instance attribute `.condition` is gone, replaced by `.brick_name` (D10).
+  The `condition` field is removed from `StepDefinition`; a guard step must set
+  `brick`, and may not set `blueprint`.
+
+  ***Upgrading:*** replace the guard's `condition:` expression with a `brick:`
+  naming a predicate brick and the values it needs under `params:`. A guard
+  that read `condition: "todays['result']"` becomes:
+
+  ```yaml
+  - name: enough_events
+    type: guard
+    brick: is_not_empty
+    params:
+      value: "${todays.result}"
+    message: "no events today"
+  ```
+
+  A comparison such as `condition: "count['result'] > 3"` becomes
+  `brick: compare_values` with `params: {a: "${count.result}", b: 3,
+  operator: gt}`. Compound conditions become two guards in sequence. No
+  shipped blueprint used the old form, so there is nothing to migrate; an
+  old-form guard now fails loudly with `Guard step must specify 'brick'`.
+
 ### Fixed
 - `pluggy` is now a declared runtime dependency. `import bricks.core.hooks`
   raised `ModuleNotFoundError` on a plain (non-`[dev]`) install, because
