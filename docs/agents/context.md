@@ -43,7 +43,7 @@ src/bricks/packs.py           Entry-point discovery for the `bricks.packs` group
 src/bricks/stdlib/            101 public bricks across 7 modules; +2 DSL builtins in core/builtins.py.
 src/bricks/cli/main.py        The typer CLI. AI commands import lazily behind gates (D3).
 src/bricks/store/             The blueprint cache (file or in-memory).
-tests/                        840 tests, pytest only.
+tests/                        850 tests, pytest only.
 ```
 
 Inert in the engine today, and known to be: `boot/`, `selector/`,
@@ -62,12 +62,16 @@ Each cites its ledger row. Breaking one fails review on the Standards axis.
   `tests/core/test_no_ai_imports.py:30` (`test_import_bricks_loads_no_ai_modules`)
   and `:46` (`test_import_engine_cli_loads_no_ai_modules`). The dependency is
   one-way, always.
-- **A blueprint is data, not code** (D4). *Loading* one never imports or
-  executes caller-supplied Python: `src/bricks/core/loader.py:45` builds
-  ruamel's round-trip `YAML()`, not `typ="unsafe"`, so no YAML tag can
-  construct an arbitrary Python object. Loading is the whole of that
-  guarantee — at run time a guard condition still reaches a bare `eval()`
-  (G4, see the next section).
+- **A blueprint is data, not code** (D4), **and no string in one is ever
+  executed as code** (D13). *Loading* one never imports or executes
+  caller-supplied Python: `src/bricks/core/loader.py:45` builds ruamel's
+  round-trip `YAML()`, not `typ="unsafe"`, so no YAML tag can construct an
+  arbitrary Python object. *Running* one no longer does either: a `type: guard`
+  step names a brick, which the engine calls like any other step, so the
+  `eval` that used to evaluate a guard expression is gone (D13 closed G4).
+  `grep -rn "eval(\|exec(" src/bricks/core/` must return nothing, and the
+  `lint` job in `.github/workflows/ci.yml` runs exactly that grep. Do not
+  reintroduce either, in any form.
 - **A brick is a plain typed function returning a dict** (D5). No base class to
   inherit, no framework types in the signature. Descriptions follow
   [`src/bricks/BRICK_STYLE_GUIDE.md`](../../src/bricks/BRICK_STYLE_GUIDE.md).
@@ -107,10 +111,9 @@ and false in the code. They are known and accepted. **Do not fix one as a side
 effect of another issue.** Most are blocked on an open decision (O1–O7), so
 "fixing" one silently settles a decision that is not the coder's to settle.
 
-The two you are most likely to trip over:
+G4 is no longer one of them: D13 deleted the guard `eval`, and O2 is settled.
+The one you are most likely to trip over:
 
-- YAML guard conditions reach a bare `eval()` (`core/engine.py:346`, builtins
-  emptied). So a blueprint is data everywhere *except* there (G4, open as O2).
 - `run_blueprint()` validates before it runs —
   `BlueprintValidator(registry=reg).validate(blueprint)` at
   `src/bricks/api.py:86`; the CLI's `bricks run` builds the engine directly and

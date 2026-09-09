@@ -67,19 +67,19 @@ class YamlLoadError(BrickError):
 
 
 class GuardFailedError(BrickError):
-    """Raised when a guard step condition evaluates to False."""
+    """Raised when a guard step's predicate brick returns a falsy result."""
 
     def __init__(
         self,
         step_name: str,
-        condition: str,
+        brick_name: str,
         message: str,
         actual: str,
     ) -> None:
         self.step_name = step_name
-        self.condition = condition
+        self.brick_name = brick_name
         self.actual = actual
-        super().__init__(f"Guard {step_name!r} failed: {message}\n  Condition : {condition!r}\n  Actual    : {actual}")
+        super().__init__(f"Guard {step_name!r} failed: {message}\n  Brick     : {brick_name!r}\n  Actual    : {actual}")
 
 
 class OrchestratorError(BrickError):

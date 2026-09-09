@@ -44,6 +44,31 @@ def _call_teardown(
         pass  # Never mask the original error
 
 
+def _teardown_chain(
+    callable_: Any,
+    resolved_params: dict[str, Any],
+    meta: BrickMeta,
+    completed: list[tuple[Any, dict[str, Any], BrickMeta]],
+    error: Exception,
+) -> None:
+    """Tear down the failing step, then every completed step in reverse order.
+
+    This is the contract stated on :class:`BlueprintEngine`: on failure,
+    teardown runs on the failing step first and then backwards through the
+    steps that already succeeded.
+
+    Args:
+        callable_: The failing step's brick callable.
+        resolved_params: The parameters that step was called with.
+        meta: The failing brick's metadata.
+        completed: Steps that already succeeded, in execution order.
+        error: The error that ended the run.
+    """
+    _call_teardown(callable_, resolved_params, meta, error)
+    for prev_callable, prev_params, prev_meta in reversed(completed):
+        _call_teardown(prev_callable, prev_params, prev_meta, error)
+
+
 class BlueprintEngine:
     """Executes a validated BlueprintDefinition step-by-step.
 
@@ -152,7 +177,6 @@ class BlueprintEngine:
                 completed,
                 depth,
                 verbosity,
-                context,
             )
 
             if step_result is not None:
@@ -180,7 +204,6 @@ class BlueprintEngine:
         completed: list[tuple[Any, dict[str, Any], BrickMeta]],
         depth: int,
         verbosity: Verbosity,
-        context: ExecutionContext,
     ) -> tuple[Any, StepResult | None]:
         """Execute a single step (brick, sub-blueprint, or guard).
 
@@ -190,17 +213,16 @@ class BlueprintEngine:
             completed: Mutable list of completed steps for teardown tracking.
             depth: Current recursion depth.
             verbosity: Execution trace detail level.
-            context: Current execution context (used by guard steps).
 
         Returns:
             Tuple of (step result value, optional StepResult for tracing).
 
         Raises:
             BrickExecutionError: If the step fails.
-            GuardFailedError: If a guard condition evaluates to False.
+            GuardFailedError: If a guard's predicate brick returns a falsy result.
         """
         if step.type == "guard":
-            return self._execute_guard_step(step, context)
+            return self._execute_guard_step(step, resolved_params, completed)
         if step.brick is not None:
             return self._execute_brick_step(step, resolved_params, completed, verbosity)
         return self._execute_sub_blueprint_step(step, resolved_params, depth, verbosity)
@@ -239,14 +261,10 @@ class BlueprintEngine:
             # Already attributed by an inner primitive (for_each / branch /
             # sub-blueprint). Run teardown, then propagate unchanged so the
             # real failing brick's name survives. See issue #34.
-            _call_teardown(callable_, resolved_params, meta, exc)
-            for prev_callable, prev_params, prev_meta in reversed(completed):
-                _call_teardown(prev_callable, prev_params, prev_meta, exc)
+            _teardown_chain(callable_, resolved_params, meta, completed, exc)
             raise
         except Exception as exc:
-            _call_teardown(callable_, resolved_params, meta, exc)
-            for prev_callable, prev_params, prev_meta in reversed(completed):
-                _call_teardown(prev_callable, prev_params, prev_meta, exc)
+            _teardown_chain(callable_, resolved_params, meta, completed, exc)
             raise BrickExecutionError(
                 brick_name=brick_name,
                 step_name=step.name,
@@ -323,42 +341,72 @@ class BlueprintEngine:
     def _execute_guard_step(
         self,
         step: StepDefinition,
-        context: ExecutionContext,
+        resolved_params: dict[str, Any],
+        completed: list[tuple[Any, dict[str, Any], BrickMeta]],
     ) -> tuple[None, None]:
-        """Evaluate a guard condition against the current execution context.
+        """Evaluate a guard by calling the predicate brick it names.
 
-        The condition is evaluated with a restricted scope: all named step
-        results saved so far, plus ``__builtins__`` set to an empty dict.
+        A guard names a brick like every other step. The brick is looked up in
+        the registry, called with the step's resolved ``params``, and the
+        truthiness of its result decides whether the run continues — the same
+        rule ``__branch__`` applies to its ``condition_brick``. No string from
+        a blueprint is ever executed as code (D13).
+
+        A predicate that *raises* fails the step as a brick failure —
+        ``BrickExecutionError`` naming this brick and step (D8) — not as a
+        guard rejection. A predicate that returns a falsy result raises
+        ``GuardFailedError``. Either way teardown runs, on this step first and
+        then in reverse order over the steps already completed: a guard that
+        stops the run abandons the same resources a raised brick would.
+
+        Note: a guard deliberately emits **no** :class:`StepResult` at any
+        verbosity and fires **no** ``step_start`` / ``step_done`` hook, so a
+        guard step is invisible in an execution trace and to a progress UI.
+        That is longstanding behaviour, kept here on purpose and tracked as
+        its own issue — do not fix it in passing.
 
         Args:
-            step: The guard step definition (must have ``condition`` set).
-            context: Current execution context providing variable bindings.
+            step: The guard step definition (must have ``brick`` set).
+            resolved_params: Pre-resolved parameters for the predicate brick.
+            completed: Mutable list of completed steps for teardown tracking.
 
         Returns:
-            ``(None, None)`` when the condition passes.
+            ``(None, None)`` when the guard passes.
 
         Raises:
-            GuardFailedError: When the condition evaluates to a falsy value.
+            BrickExecutionError: If the predicate brick raises.
+            GuardFailedError: If the predicate brick returns a falsy result.
         """
-        condition: str = step.condition  # type: ignore[assignment]  # validated non-None
-        scope: dict[str, Any] = dict(context.results)
+        brick_name: str = step.brick  # type: ignore[assignment]  # validated non-None
+        callable_, meta = self._registry.get(brick_name)
+
         try:
-            passed = bool(eval(condition, {"__builtins__": {}}, scope))  # noqa: S307
+            raw = callable_(**resolved_params)
+        except BrickExecutionError as exc:
+            # Already attributed by an inner primitive — propagate unchanged
+            # so the real failing brick's name survives. See issue #34.
+            _teardown_chain(callable_, resolved_params, meta, completed, exc)
+            raise
         except Exception as exc:
-            raise GuardFailedError(
+            _teardown_chain(callable_, resolved_params, meta, completed, exc)
+            raise BrickExecutionError(
+                brick_name=brick_name,
                 step_name=step.name,
-                condition=condition,
-                message=f"Condition raised an error: {exc}",
-                actual=str(scope)[:200],
+                cause=exc,
             ) from exc
 
+        passed = bool(raw.get("result", False) if isinstance(raw, dict) else raw)
         if not passed:
-            raise GuardFailedError(
+            failure = GuardFailedError(
                 step_name=step.name,
-                condition=condition,
+                brick_name=brick_name,
                 message=step.message,
-                actual=str(scope)[:200],
+                actual=str(raw)[:200],
             )
+            _teardown_chain(callable_, resolved_params, meta, completed, failure)
+            raise failure
+
+        completed.append((callable_, resolved_params, meta))
         return None, None
 
 

@@ -18,6 +18,13 @@ jobs:
       - run: ruff format --check .
       - run: mypy src/bricks
       - run: lint-imports
+      # D13 — no string in a blueprint is ever executed as code. `test -d`
+      # first: grep exits 2 on a missing directory and `if` would read that
+      # as "no match", so a rename must fail loudly rather than pass silently.
+      - name: "D13: no eval/exec in the engine core"
+        run: |
+          test -d src/bricks/core/ || exit 1
+          if grep -rn "eval(\|exec(" src/bricks/core/; then exit 1; fi
 
   test:
     runs-on: ubuntu-latest

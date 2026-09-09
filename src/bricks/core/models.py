@@ -24,7 +24,9 @@ class StepDefinition(BaseModel):
 
     Steps of ``type="brick"`` (default) or ``type="blueprint"`` must specify
     exactly one of ``brick`` or ``blueprint``.  Steps of ``type="guard"`` must
-    specify ``condition`` (a Python expression) and optionally ``message``.
+    also specify ``brick`` — the name of a predicate brick, called with
+    ``params``; the truthiness of its result decides the guard (D13). A guard
+    may not name a ``blueprint``, and optionally carries a ``message``.
     """
 
     name: str
@@ -33,15 +35,16 @@ class StepDefinition(BaseModel):
     blueprint: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)
     save_as: str | None = None
-    condition: str | None = None
     message: str = "Guard condition not met"
 
     @model_validator(mode="after")
     def check_step_fields(self) -> StepDefinition:
         """Enforce field constraints per step type."""
         if self.type == "guard":
-            if self.condition is None:
-                raise ValueError("Guard step must specify 'condition'")
+            if self.brick is None:
+                raise ValueError("Guard step must specify 'brick'")
+            if self.blueprint is not None:
+                raise ValueError("Guard step cannot specify 'blueprint'")
             return self
         if self.brick is None and self.blueprint is None:
             raise ValueError("Step must specify either 'brick' or 'blueprint'")

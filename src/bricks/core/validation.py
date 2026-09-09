@@ -36,7 +36,7 @@ class BlueprintValidator:
     """Validates a BlueprintDefinition against the registry without executing.
 
     Checks:
-    - All referenced bricks exist in the registry (brick steps only).
+    - All referenced bricks exist in the registry (brick and guard steps).
     - Sub-blueprint file paths exist on disk (blueprint steps only).
     - save_as names are unique across steps.
     - Duplicate step names are not allowed.
@@ -76,7 +76,9 @@ class BlueprintValidator:
                 errors=errors,
             )
 
-        # Check 1: All referenced bricks exist (brick steps) / sub-blueprint files exist (blueprint steps)
+        # Check 1: All referenced bricks exist (brick and guard steps) /
+        # sub-blueprint files exist (blueprint steps). A guard names a predicate
+        # brick (D13), so an unknown guard brick fails here, before anything runs.
         for step in blueprint.steps:
             if step.brick is not None:
                 if not self._registry.has(step.brick):
