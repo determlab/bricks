@@ -26,6 +26,24 @@ policy above holds from 0.2.0 onward.
 
 ## [Unreleased]
 
+### Added
+- **A selector measurement, with a recorded baseline.** `TieredCatalog` now has
+  a test that runs one 30-task set against it twice — once with
+  `CatalogConfig.common_set` holding all 101 stdlib bricks, once with the 14
+  `block-set.md` keeps visible — and records what each configuration listed,
+  found and missed in `tests/baselines/selector_measurement.md`. Fourteen tasks
+  have an answer inside the small set and sixteen deliberately do not.
+
+  Tier 1 hits 30/30 at 101 bricks and 14/30 at 14; every one of those 16 misses
+  is recovered by a single tier-2 search. The cost of the full listing is
+  precision 0.0099 against 0.0714, and a mean of 3.00 same-keyword rivals beside
+  the right answer against 0.37. The measurement has no model in it, so it
+  reports what a caller is *shown*, not what a model would *pick*.
+
+  Test-only: no engine behaviour changed. Regenerate the baseline with
+  `BRICKS_UPDATE_BASELINE=1 python -m pytest tests/core/test_selector_measurement.py`.
+  (#31, `tool-set.md` R6)
+
 ### Changed
 - **A `type: guard` step names a brick instead of carrying a Python
   expression.** The engine no longer calls `eval` on anything from a
