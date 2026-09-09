@@ -53,10 +53,11 @@ pip install -e .        # PyPI release planned
 The base install ships:
 
 - The execution engine: blueprint loading, DAG execution, and validation
-- An AST whitelist (`PythonDSLValidator`) for validating machine-authored blueprint DSL
-  — ⚠️ **it does not cover the `guard` step.** A `condition:` is evaluated directly, so
-  today a blueprint is only as trusted as whoever wrote it. Treat blueprints as code you
-  review, not as inert data. Tracked in [#17](https://github.com/determlab/bricks/issues/17)
+- **No string in a blueprint is ever executed as code.** A guard names a brick; there is
+  no expression field and no `eval` — CI checks that it stays that way (decision D13).
+  Separately, `PythonDSLValidator` is an AST whitelist for the `@flow` Python path
+  (machine-authored DSL). It validates that path; it is not what makes YAML blueprints
+  safe — the absence of any code path is.
 - A stdlib of typed, pre-tested bricks (data, string, math, date/time, validation, list ops, encoding)
 - The blueprint store — caches validated blueprints (file or in-memory) so repeated tasks
   reuse a known-good pipeline instead of rebuilding it
