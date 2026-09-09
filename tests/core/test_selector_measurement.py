@@ -29,8 +29,11 @@ accuracy*. It cannot locate a degradation curve and it cannot confirm or refute
 What it does measure is the thing the selector actually controls: how much of the
 catalog a caller is shown, whether the right brick is in that listing, how many
 same-keyword rivals sit beside it, and whether one Tier-2 search recovers a miss.
-The `full` hit-rate is 100% by construction (everything is listed); the number
-that carries information there is the precision and the rival count.
+The `full` hit-rate is 100% by construction (everything is listed); precision
+there is by construction too, since every task has exactly one expected brick,
+so mean precision is exactly 1 / listing-size (0.0099 = 1/101, 0.0714 = 1/14) -
+it just restates how big the listing is. The rival count is the informative
+number.
 
 Runtime is well under a second, so this runs in the default suite with no marker
 and CI's existing `pytest` step picks it up.
@@ -197,7 +200,9 @@ def _percent(hits: int, total: int) -> str:
 
 
 def _mean_precision(outcomes: list[Outcome]) -> float:
-    """Mean of ``expected / listed`` — the signal-to-noise of the tier-1 listing."""
+    """Mean of ``expected / listed``. Every task has one expected brick, so this
+    is exactly ``1 / listed`` by construction — it restates the listing size,
+    not a discovered signal-to-noise ratio."""
     pairs = zip(TASKS, outcomes, strict=True)
     return sum(len(t.expected) / o.listed for t, o in pairs) / len(outcomes)
 
@@ -222,7 +227,8 @@ def build_report() -> str:
         "task set, the metric definitions and the limits of this measurement are written",
         "down. Short version: there is no model in this loop, so this measures what the",
         "caller is *shown*, not what a model would *pick*. The full-registry hit-rate is",
-        "100% by construction; the informative numbers there are precision and rivals.",
+        "100% by construction, and so is its precision (1 / listing-size, since each",
+        "task has one expected brick) - the rival count is the informative number.",
         "",
         "## Configurations",
         "",
@@ -248,12 +254,21 @@ def build_report() -> str:
         row("candidates to choose between (mean)", lambda rs: f"{sum(r.candidates for r in rs) / total:.1f}"),
         row("worst-case two-step candidates", lambda rs: f"{max(r.candidates for r in rs)}"),
         "",
+        "The common-set tier-1 hit-rate (14/30 = 46.7%) is by construction as well:",
+        "the 14 inside tasks are exactly one task per `common_set` brick, so this is",
+        "the task mix restated, not a discovered rate.",
+        "",
         "Tier 2 is the same search in both configurations, so it has one number:",
         "the query returned every expected brick on "
         f"{_percent(sum(r.search_found_expected for r in results['common set']), total)} of tasks.",
         "The tasks where it did not are recorded below; each of those happens to be",
         "answerable from tier 1 in the common-set configuration, which is why the",
         "two-step hit-rate is unaffected. It would not be, if those bricks were hidden.",
+        "",
+        "Two tasks have a second equally correct answer not counted above: T11",
+        "(`is_not_empty`) is also answered, inverted, by `is_empty_list`; T17",
+        "(`truncate_text`) names the same job as `truncate_string`, the pair",
+        "`block-set.md` calls a coin-flip. Expected answers are unchanged.",
         "",
         "## Per task",
         "",
@@ -315,9 +330,14 @@ def test_queries_are_single_words_the_prompt_uses() -> None:
     """The query rule, enforced: a query tuned to the answer would measure nothing.
 
     The rule makes tier-2 recovery a *best case* — a real caller may search a word
-    the catalog does not use, and three of these thirty do exactly that. It is the
-    right bias here, because the number under test is the tier-1 hit-rate and the
-    query must not quietly favour either configuration.
+    the catalog does not use, and three of these thirty do exactly that. But the
+    bigger reason it is a best case: in 14 of the 16 outside tasks, the query
+    word is also a literal substring of the expected brick's own name (e.g. T15
+    "csv" / `convert_to_csv_str`, T20 "first" / `take_first_n`). The prompts were
+    written in the bricks' own vocabulary, and this rule cannot catch that — it
+    only checks that the query is a single word taken from the prompt. It is
+    still the right bias here, because the number under test is the tier-1
+    hit-rate and the query must not quietly favour either configuration.
     """
     offenders = [t.task_id for t in TASKS if t.query.lower() not in t.prompt.lower() or " " in t.query]
     assert not offenders, f"tier-2 query is not a single word from the prompt: {offenders}"

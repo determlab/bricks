@@ -35,10 +35,12 @@ policy above holds from 0.2.0 onward.
   have an answer inside the small set and sixteen deliberately do not.
 
   Tier 1 hits 30/30 at 101 bricks and 14/30 at 14; every one of those 16 misses
-  is recovered by a single tier-2 search. The cost of the full listing is
-  precision 0.0099 against 0.0714, and a mean of 3.00 same-keyword rivals beside
-  the right answer against 0.37. The measurement has no model in it, so it
-  reports what a caller is *shown*, not what a model would *pick*.
+  is recovered by a single tier-2 search. The cost of the full listing is a mean
+  of 3.00 same-keyword rivals beside the right answer against 0.37 (precision,
+  0.0099 against 0.0714, is by the same construction as the hit-rate — every
+  task has one expected brick, so it is exactly 1/listing-size, not a discovered
+  number). The measurement has no model in it, so it reports what a caller is
+  *shown*, not what a model would *pick*.
 
   Test-only: no engine behaviour changed. Regenerate the baseline with
   `BRICKS_UPDATE_BASELINE=1 python -m pytest tests/core/test_selector_measurement.py`.

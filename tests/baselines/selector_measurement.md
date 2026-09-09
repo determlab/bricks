@@ -8,7 +8,8 @@ Produced by `tests/core/test_selector_measurement.py`, which is also where the
 task set, the metric definitions and the limits of this measurement are written
 down. Short version: there is no model in this loop, so this measures what the
 caller is *shown*, not what a model would *pick*. The full-registry hit-rate is
-100% by construction; the informative numbers there are precision and rivals.
+100% by construction, and so is its precision (1 / listing-size, since each
+task has one expected brick) - the rival count is the informative number.
 
 ## Configurations
 
@@ -28,11 +29,20 @@ caller is *shown*, not what a model would *pick*. The full-registry hit-rate is
 | candidates to choose between (mean) | 101.0 | 17.2 |
 | worst-case two-step candidates | 101 | 31 |
 
+The common-set tier-1 hit-rate (14/30 = 46.7%) is by construction as well:
+the 14 inside tasks are exactly one task per `common_set` brick, so this is
+the task mix restated, not a discovered rate.
+
 Tier 2 is the same search in both configurations, so it has one number:
 the query returned every expected brick on 27/30 = 90.0% of tasks.
 The tasks where it did not are recorded below; each of those happens to be
 answerable from tier 1 in the common-set configuration, which is why the
 two-step hit-rate is unaffected. It would not be, if those bricks were hidden.
+
+Two tasks have a second equally correct answer not counted above: T11
+(`is_not_empty`) is also answered, inverted, by `is_empty_list`; T17
+(`truncate_text`) names the same job as `truncate_string`, the pair
+`block-set.md` calls a coin-flip. Expected answers are unchanged.
 
 ## Per task
 
