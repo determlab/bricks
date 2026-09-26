@@ -107,8 +107,35 @@ def test_config_path_adds_on_top_of_stdlib(tmp_path: Path) -> None:
     assert "  my_local_brick" in listed.stdout, listed.stdout
     assert "  extract_json_from_str" in listed.stdout, listed.stdout
 
-    # On a name clash the installed pack wins: the pack is loaded first, and
-    # discovery skips a name that is already registered.
+    # On a name clash the installed pack wins (the warning is tested below).
     ran = _bricks(work, "run", "blueprints/crm_pipeline.yaml", "-i", f"crm_json={_CRM_JSON}")
     assert ran.returncode == 0, f"stdout={ran.stdout}\nstderr={ran.stderr}"
     assert "  avg_active_revenue: 3650.0" in ran.stdout, ran.stdout
+
+
+def test_shadowed_local_brick_warns(tmp_path: Path) -> None:
+    """A local brick named like a pack brick is not dropped silently (#39)."""
+    work = _clean_dir_with_blueprint(tmp_path)
+    (work / "lib").mkdir()
+    (work / "lib" / "mine.py").write_text(
+        "from bricks.core import brick\n\n"
+        "@brick()\n"
+        "def divide(a: float, b: float) -> dict[str, float]:\n"
+        "    return {'result': -1.0}\n"
+        "\n"
+        "@brick()\n"
+        "def my_local_brick(a: int) -> dict[str, int]:\n"
+        "    return {'result': a}\n"
+    )
+    (work / "bricks.config.yaml").write_text("registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n")
+
+    result = _bricks(work, "run", "blueprints/crm_pipeline.yaml", "-i", f"crm_json={_CRM_JSON}")
+    assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+    assert "  avg_active_revenue: 3650.0" in result.stdout, result.stdout
+    assert "Warning: local brick 'divide'" in result.stderr, result.stderr
+    assert "the pack version wins" in result.stderr, result.stderr
+    assert "my_local_brick" not in result.stderr, result.stderr
+    assert "Warning" not in result.stdout, result.stdout
+
+    listed = _bricks(work, "list")
+    assert "  my_local_brick" in listed.stdout, listed.stdout

@@ -43,8 +43,8 @@ def _setup_registry(
     Starts from the Python API's default registry — every installed
     ``bricks.packs`` pack (the stdlib included) plus DSL builtins — then adds
     the bricks found in ``config.registry.paths`` when ``auto_discover`` is on.
-    Packs load first, so on a name clash the pack's brick is kept and the
-    path's brick is skipped.
+    On a name clash the pack's brick is kept, the path's brick is skipped, and
+    a warning naming the brick goes to stderr.
 
     Args:
         config_dir: Directory to search for bricks.config.yaml. Defaults to cwd.
@@ -60,7 +60,8 @@ def _setup_registry(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     if config.registry.auto_discover:
-        discovery = BrickDiscovery(registry=registry)
+        local = BrickRegistry()
+        discovery = BrickDiscovery(registry=local)
         for path_str in config.registry.paths:
             p = Path(path_str)
             if not p.is_absolute():
@@ -69,6 +70,16 @@ def _setup_registry(
                 discovery.discover_package(p)
             elif p.suffix == ".py" and p.exists():
                 discovery.discover_path(p)
+        for name, _ in local.list_all():
+            if registry.has(name):
+                typer.echo(
+                    f"Warning: local brick {name!r} has the same name as an installed pack brick; "
+                    "the pack version wins and the local one is not used.",
+                    err=True,
+                )
+                continue
+            callable_, meta = local.get(name)
+            registry.register(name, callable_, meta)
     return registry, config
 
 
