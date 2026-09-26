@@ -11,7 +11,8 @@ reviewed: 2026-09-27
 
 bricks runs a pipeline written as a YAML file (a "blueprint") that names small typed
 Python functions ("bricks") and the order to call them in. There is no model in the
-run: the same blueprint and the same inputs give the same outputs every time.
+run: the same blueprint and the same inputs give the same outputs every time,
+except where a blueprint uses one of four clock or random bricks (see Side effects).
 
 ## Install
 
@@ -67,7 +68,7 @@ Python is the working entry point:
   prints `103 __branch__` (101 stdlib bricks plus 2 DSL builtins).
 
 CLI (`bricks --help` lists all): `run`, `check`, `dry-run`, `list`, `init`, `new`,
-`store seed`, `store list`. **No command takes `--json`**; all print text. `compose`,
+`store seed`, `store list`, `check-env`. **No command takes `--json`**; all print text. `compose`,
 `demo`, `serve` and `playground` need the separate `bricks-ai` package and an LLM.
 `bricks serve` (the MCP server) is one of them: without it, it exits 1 with
 `Error: MCP features require the 'mcp' package.` There is no MCP server in this
@@ -75,8 +76,11 @@ package.
 
 ## Side effects
 
-- `run_blueprint` runs bricks in your process. The stdlib bricks are pure
-  functions: no file, network or process calls.
+- `run_blueprint` runs bricks in your process. The stdlib bricks make no file,
+  network or process calls.
+- Four stdlib bricks read the clock or random (`now_timestamp`, `days_until`,
+  `generate_uuid`, `random_string`), so a blueprint that uses one is not
+  reproducible ([G1 in docs/DECISIONS.md](docs/DECISIONS.md)).
 - Each brick declares `destructive` and `idempotent` (from `registry_schema`, or
   `[DESTRUCTIVE]` in `bricks list`). No stdlib brick is destructive. A third-party
   pack sets these flags itself, and the engine does not stop or ask before a
