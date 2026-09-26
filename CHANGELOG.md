@@ -95,6 +95,20 @@ policy above holds from 0.2.0 onward.
 - `pluggy` is now a declared runtime dependency. `import bricks.core.hooks`
   raised `ModuleNotFoundError` on a plain (non-`[dev]`) install, because
   pluggy only reached environments transitively through `pytest`. (#9)
+- **The CLI loads the `bricks.packs` entry point.** `bricks run`, `check`,
+  `dry-run`, `list` and `compose` built their registry only from the paths in
+  `bricks.config.yaml`, so from a fresh clone they saw no stdlib bricks at all.
+  `_setup_registry` now starts from `build_default_registry()` — every
+  installed pack plus the DSL builtins, the same registry `run_blueprint()`
+  uses — and adds the configured paths on top. Packs load first, so on a name
+  clash the pack's brick is kept and the path's brick is skipped. With no pack
+  installed, the CLI prints the install hint and exits 1. `bricks init` still
+  writes `paths: []`.
+- **`bricks run -i key=value` passes the value as text when the blueprint
+  declares that input as `"str"`.** Before, every value went through
+  `json.loads`, so `-i crm_json='[...]'` reached `extract_json_from_str` as a
+  list and failed. Inputs not declared `"str"` are still parsed as JSON. The
+  README "Quick Start — CLI" now prints a command that runs. (#39)
 
 ## [0.5.0] - 2026-06-12
 

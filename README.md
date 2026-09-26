@@ -93,12 +93,23 @@ result = run_blueprint(yaml_string, inputs={...}, registry=registry)
 ## Quick Start — CLI
 
 ```bash
-bricks run blueprints/crm_pipeline.yaml -i crm_json='[...]'   # execute a blueprint
+bricks run blueprints/crm_pipeline.yaml -i crm_json='[{"status": "active", "monthly_revenue": 4200}, {"status": "churned", "monthly_revenue": 1800}, {"status": "active", "monthly_revenue": 3100}]'
+# Blueprint 'crm_pipeline' completed.
+# Outputs:
+#   active_count: 2
+#   total_active_revenue: 7300
+#   avg_active_revenue: 3650.0
+
 bricks check blueprints/crm_pipeline.yaml                     # validate without executing
 bricks list                                                   # list registered bricks
 bricks new brick my_brick                                     # scaffold a brick
 bricks store seed blueprints/                                 # seed the blueprint cache
 ```
+
+No config is needed: the CLI loads every installed brick pack (the stdlib
+included), the same registry as `build_default_registry()`. The `paths` in
+`bricks.config.yaml` (with `auto_discover: true`) add bricks on top; on a name
+clash, the pack's brick wins.
 
 > `bricks dry-run` is currently an alias for `check`.
 

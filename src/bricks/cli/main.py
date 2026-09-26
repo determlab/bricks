@@ -9,6 +9,7 @@ from typing import Any
 
 import typer
 
+from bricks.api import build_default_registry
 from bricks.cli.check_env import check_env as _check_env_fn
 from bricks.core.config import BricksConfig, ConfigLoader
 from bricks.core.discovery import BrickDiscovery
@@ -22,6 +23,7 @@ from bricks.core.loader import BlueprintLoader
 from bricks.core.models import Verbosity
 from bricks.core.registry import BrickRegistry
 from bricks.core.validation import BlueprintValidator
+from bricks.errors import BricksConfigError
 
 app = typer.Typer(
     name="bricks",
@@ -36,7 +38,13 @@ app.add_typer(new_app, name="new")
 def _setup_registry(
     config_dir: Path | None = None,
 ) -> tuple[BrickRegistry, BricksConfig]:
-    """Load config and set up registry with auto-discovery.
+    """Load config and build the registry the CLI runs against.
+
+    Starts from the Python API's default registry — every installed
+    ``bricks.packs`` pack (the stdlib included) plus DSL builtins — then adds
+    the bricks found in ``config.registry.paths`` when ``auto_discover`` is on.
+    Packs load first, so on a name clash the pack's brick is kept and the
+    path's brick is skipped.
 
     Args:
         config_dir: Directory to search for bricks.config.yaml. Defaults to cwd.
@@ -46,7 +54,11 @@ def _setup_registry(
     """
     loader = ConfigLoader()
     config = loader.load(directory=config_dir)
-    registry = BrickRegistry()
+    try:
+        registry = build_default_registry()
+    except BricksConfigError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
     if config.registry.auto_discover:
         discovery = BrickDiscovery(registry=registry)
         for path_str in config.registry.paths:
@@ -233,6 +245,11 @@ def run(
             typer.echo(f"Error: Invalid input format {item!r}. Use key=value.", err=True)
             raise typer.Exit(code=1)
         k, v = item.split("=", 1)
+        # An input the blueprint declares as "str" is passed as typed, so
+        # crm_json='[...]' reaches the brick as text, the same as the Python API.
+        if bp_def.inputs.get(k) == "str":
+            inputs[k] = v
+            continue
         try:
             inputs[k] = json.loads(v)
         except json.JSONDecodeError:
