@@ -33,14 +33,40 @@ class AiConfig(BaseModel):
     max_tokens: int = 4096
 
 
+#: The shipped Tier 1 listing: the 14 bricks ``block-set.md`` marks "Keep
+#: visible, unchanged", in the spec's order (D15). Measured against the full
+#: registry in ``tests/core/test_selector_measurement.py`` (#31).
+DEFAULT_COMMON_SET: tuple[str, ...] = (
+    "sort_dict_list",
+    "map_values",
+    "group_by_key",
+    "calculate_aggregates",
+    "extract_json_from_str",
+    "select_dict_keys",
+    "merge_dictionaries",
+    "add_days",
+    "date_diff",
+    "compare_values",
+    "is_not_empty",
+    "unique_values",
+    "round_number",
+    "percentage",
+)
+
+
 class CatalogConfig(BaseModel):
     """Tiered catalog configuration.
 
     ``common_set`` lists brick names that are always shown by
     :meth:`~bricks.core.catalog.TieredCatalog.list_bricks` (Tier 1).
+
+    It ships populated with the 14 bricks ``block-set.md`` keeps visible
+    (D15, ``tool-set.md`` R3): the composer's catalog is the common set, not
+    the registry. Every other brick stays reachable through Tier 2 search.
+    Pass a config with a different ``common_set`` to list more.
     """
 
-    common_set: list[str] = Field(default_factory=list)
+    common_set: list[str] = Field(default_factory=lambda: list(DEFAULT_COMMON_SET))
 
 
 class StoreConfig(BaseModel):
