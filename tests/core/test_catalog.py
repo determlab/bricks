@@ -9,6 +9,7 @@ from bricks.core.catalog import TieredCatalog
 from bricks.core.config import CatalogConfig, ConfigLoader
 from bricks.core.exceptions import BrickNotFoundError
 from bricks.core.registry import BrickRegistry
+from bricks.stdlib import register
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -192,11 +193,54 @@ class TestClearSessionCache:
 # ── Config integration ────────────────────────────────────────────────────────
 
 
+#: The 14 bricks ``block-set.md`` keeps visible ("Keep visible, unchanged"), in
+#: the spec's order. ``tool-set.md`` R3 / D15: this is the shipped default.
+BLOCK_SET_COMMON: list[str] = [
+    "sort_dict_list",
+    "map_values",
+    "group_by_key",
+    "calculate_aggregates",
+    "extract_json_from_str",
+    "select_dict_keys",
+    "merge_dictionaries",
+    "add_days",
+    "date_diff",
+    "compare_values",
+    "is_not_empty",
+    "unique_values",
+    "round_number",
+    "percentage",
+]
+
+
+def _stdlib_registry() -> BrickRegistry:
+    """A registry holding the whole stdlib, not stubs."""
+    registry = BrickRegistry()
+    register(registry)
+    return registry
+
+
 class TestCatalogConfig:
-    def test_catalog_config_default_is_empty(self) -> None:
-        """CatalogConfig defaults to an empty common_set."""
+    def test_catalog_config_default_is_block_set_common(self) -> None:
+        """CatalogConfig ships with the block-set.md common set (D15)."""
         cfg = CatalogConfig()
-        assert cfg.common_set == [], f"Expected [], got {cfg.common_set!r}"
+        assert cfg.common_set == BLOCK_SET_COMMON, f"Expected {BLOCK_SET_COMMON!r}, got {cfg.common_set!r}"
+
+    def test_default_config_list_bricks_is_exactly_the_common_set(self) -> None:
+        """list_bricks() with the default config lists the common set, <= 20 (D15)."""
+        registry = _stdlib_registry()
+        catalog = TieredCatalog(registry=registry, common_set=CatalogConfig().common_set)
+        names = [b["name"] for b in catalog.list_bricks()]
+        assert len(names) <= 20, f"Default listing exceeds the 20-tool ceiling: {len(names)}"
+        assert names == BLOCK_SET_COMMON, f"Expected {BLOCK_SET_COMMON!r}, got {names!r}"
+
+    def test_default_config_registry_stays_complete_behind_search(self) -> None:
+        """A brick outside the common set is still reachable through tier-2 search."""
+        registry = _stdlib_registry()
+        catalog = TieredCatalog(registry=registry, common_set=CatalogConfig().common_set)
+        assert "reverse_list" not in [b["name"] for b in catalog.list_bricks()]
+        found = [b["name"] for b in catalog.lookup_brick("reverse_list")]
+        assert found == ["reverse_list"], f"Expected tier-2 to reach reverse_list, got {found!r}"
 
     def test_catalog_config_loaded_from_yaml(self) -> None:
         """CatalogConfig.common_set is populated from bricks.config.yaml."""
