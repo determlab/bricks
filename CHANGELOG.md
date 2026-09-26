@@ -52,9 +52,10 @@ policy above holds from 0.2.0 onward.
   `map_values`, `group_by_key`, `calculate_aggregates`, `extract_json_from_str`,
   `select_dict_keys`, `merge_dictionaries`, `add_days`, `date_diff`,
   `compare_values`, `is_not_empty`, `unique_values`, `round_number`,
-  `percentage`), exposed as `bricks.core.config.DEFAULT_COMMON_SET`. So
-  `TieredCatalog.list_bricks()` with the default config lists those 14, not an
-  empty list. The registry is unchanged: every other brick is still reachable
+  `percentage`), exposed as `bricks.core.config.DEFAULT_COMMON_SET`. A caller
+  that builds `TieredCatalog(registry, common_set=CatalogConfig().common_set)`
+  now lists those 14; `TieredCatalog(registry)` alone still lists nothing, and
+  no composer is wired to the default yet (G10). The registry is unchanged: every other brick is still reachable
   through tier-2 search. (#35, `tool-set.md` R3, D15)
 
   ***Upgrading:*** a caller that relied on the default config to list a
