@@ -10,6 +10,7 @@ reviewed: 2026-09-03
 Read this and [`docs/DECISIONS.md`](../DECISIONS.md) before touching anything.
 The ledger is the authority; this file is the short version, plus what the code
 actually looks like today.
+For an agent that uses bricks rather than works on it, the front door is [`AGENTS.md`](../../AGENTS.md).
 
 This file is repo-specific by design. The part of the role that is the same in
 every product repo — what the repo agent owns, why verifiability rather than
