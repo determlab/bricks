@@ -46,6 +46,14 @@ policy above holds from 0.2.0 onward.
   `BRICKS_UPDATE_BASELINE=1 python -m pytest tests/core/test_selector_measurement.py`.
   (#31, `tool-set.md` R6)
 
+- **A blueprint run twice gives byte-identical output (D1).**
+  `tests/core/test_determinism.py` runs a small `__for_each__` blueprint
+  twice with the same inputs and asserts the two `ExecutionResult.outputs`
+  are equal and render to the same bytes. A second test runs a blueprint that
+  calls `now_timestamp` against a controlled clock and asserts the two runs
+  differ, so the comparison is shown to be able to fail (G1). This closes G3.
+  Test-only: no engine behaviour changed. (#32)
+
 ### Changed
 - **`CatalogConfig.common_set` ships populated.** It defaulted to empty; it now
   holds the 14 bricks `block-set.md` keeps visible (`sort_dict_list`,
