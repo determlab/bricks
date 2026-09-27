@@ -27,29 +27,36 @@ pip install -e .
 ## First success
 
 No account, no API key, no config file. Run this from the `bricks` folder; it runs
-the example blueprint `blueprints/crm_pipeline.yaml` through the Python API:
+the example blueprint `blueprints/crm_pipeline.yaml` through the CLI:
+
+```bash
+bricks run blueprints/crm_pipeline.yaml -i crm_json='[{"status": "active", "monthly_revenue": 4200}, {"status": "churned", "monthly_revenue": 1800}, {"status": "active", "monthly_revenue": 3100}]'
+```
+
+```
+Blueprint 'crm_pipeline' completed.
+Outputs:
+  active_count: 2
+  total_active_revenue: 7300
+  avg_active_revenue: 3650.0
+```
+
+Exit 0. The numbers never change between runs. The CLI loads every installed brick
+pack (the stdlib included) with no config: `bricks list` prints
+`Registered bricks (103):`. `bricks run` does not validate before it runs
+([G8 in docs/DECISIONS.md](docs/DECISIONS.md)), so run `bricks check <file>` first.
+
+The same run through the Python API, which validates, then runs:
 
 ```bash
 python -c "import json, bricks; rows = [dict(name='Acme', status='active', monthly_revenue=4200), dict(name='Globex', status='churned', monthly_revenue=1800), dict(name='Initech', status='active', monthly_revenue=3100)]; print(bricks.run_blueprint('blueprints/crm_pipeline.yaml', inputs={'crm_json': json.dumps(rows)}).outputs)"
 ```
 
-```
-{'active_count': 2, 'total_active_revenue': 7300, 'avg_active_revenue': 3650.0}
-```
-
-Exit 0. The numbers never change between runs.
-
-**Use Python, not the CLI, for this today.** `bricks run`, `bricks check` and
-`bricks list` load only the bricks named in a `bricks.config.yaml`; they do not load
-the built-in stdlib. With no config, `bricks list` prints
-`No bricks registered. Check your bricks.config.yaml registry paths.` and
-`bricks check blueprints/crm_pipeline.yaml` exits 1 with
-`brick 'extract_json_from_str' not found in registry`. A config from `bricks init`
-does not fix it (its `registry.paths` is empty).
+prints `{'active_count': 2, 'total_active_revenue': 7300, 'avg_active_revenue': 3650.0}`.
 
 ## How an agent calls it
 
-Python is the working entry point:
+From Python:
 
 - `bricks.run_blueprint(path_or_yaml, inputs={...})` — validate, then run.
   Returns a result whose `.outputs` is a dict. A bad blueprint raises
@@ -68,8 +75,11 @@ Python is the working entry point:
   prints `103 __branch__` (101 stdlib bricks plus 2 DSL builtins).
 
 CLI (`bricks --help` lists all): `run`, `check`, `dry-run`, `list`, `init`, `new`,
-`store seed`, `store list`, `check-env`. **No command takes `--json`**; all print text. `compose`,
-`demo`, `serve` and `playground` need the separate `bricks-ai` package and an LLM.
+`store seed`, `store list`, `check-env`. **No command takes `--json`**; all print
+text. With `auto_discover: true`, the `paths` in `bricks.config.yaml` add local
+bricks on top of the packs. A local brick with a pack brick's name is not used, and
+the CLI prints a warning naming it to stderr. `compose`, `demo`, `serve` and
+`playground` need the separate `bricks-ai` package and an LLM.
 `bricks serve` (the MCP server) is one of them: without it, it exits 1 with
 `Error: MCP features require the 'mcp' package.` There is no MCP server in this
 package.

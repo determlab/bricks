@@ -451,11 +451,12 @@ class TestRunCommand:
 class TestListCommand:
     """Tests for the `list` command."""
 
-    def test_list_empty_registry(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_list_without_config_shows_stdlib(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """No bricks.config.yaml: the installed packs (the stdlib) are still listed (#39)."""
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, ["list"])
         assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
-        assert "No bricks registered" in result.output, "Expected 'No bricks registered' in output"
+        assert "extract_json_from_str" in result.output, f"Expected stdlib bricks, got {result.output!r}"
 
     def test_list_with_auto_discover(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
@@ -559,12 +560,17 @@ class TestComposeCommand:
 class TestSetupRegistry:
     """Tests for the _setup_registry helper."""
 
-    def test_setup_registry_returns_empty_by_default(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_setup_registry_is_the_api_default_without_config(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No config: the CLI registry is exactly build_default_registry() (#39)."""
+        from bricks import build_default_registry
         from bricks.cli.main import _setup_registry
 
         monkeypatch.chdir(tmp_path)
         registry, config = _setup_registry()
-        assert registry.list_all() == [], f"Expected empty registry, got {registry.list_all()!r}"
+        expected = [n for n, _ in build_default_registry().list_all()]
+        assert [n for n, _ in registry.list_all()] == expected, "Expected the Python API's default registry"
         assert config.registry.auto_discover is False, (
             f"Expected auto_discover=False, got {config.registry.auto_discover!r}"
         )
@@ -589,6 +595,7 @@ class TestSetupRegistry:
         assert "example_fn" in names, f"Expected 'example_fn' in {names!r}"
 
     def test_setup_registry_skips_nonexistent_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from bricks import build_default_registry
         from bricks.cli.main import _setup_registry
 
         monkeypatch.chdir(tmp_path)
@@ -596,5 +603,16 @@ class TestSetupRegistry:
             "registry:\n  auto_discover: true\n  paths:\n    - 'nonexistent_dir/'\n"
         )
         registry, _ = _setup_registry(config_dir=tmp_path)
-        # Should not raise; just skip the nonexistent path
-        assert registry.list_all() == [], f"Expected empty registry, got {registry.list_all()!r}"
+        # Should not raise; just skip the nonexistent path — nothing is added to the default
+        expected = [n for n, _ in build_default_registry().list_all()]
+        assert [n for n, _ in registry.list_all()] == expected, "Expected only the default registry"
+
+    def test_setup_registry_no_packs_exits_with_hint(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """With no bricks.packs installed, the CLI says so instead of a traceback."""
+        import importlib.metadata
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(importlib.metadata, "entry_points", lambda **_: [])
+        result = runner.invoke(app, ["list"])
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+        assert "No brick packs installed" in result.output, f"Expected install hint, got {result.output!r}"

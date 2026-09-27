@@ -111,6 +111,26 @@ policy above holds from 0.2.0 onward.
 - `pluggy` is now a declared runtime dependency. `import bricks.core.hooks`
   raised `ModuleNotFoundError` on a plain (non-`[dev]`) install, because
   pluggy only reached environments transitively through `pytest`. (#9)
+- **The CLI loads the `bricks.packs` entry point.** `bricks run`, `check`,
+  `dry-run`, `list` and `compose` built their registry only from the paths in
+  `bricks.config.yaml`, so from a fresh clone they saw no stdlib bricks at all.
+  `_setup_registry` now starts from `build_default_registry()` — every
+  installed pack plus the DSL builtins, the same registry `run_blueprint()`
+  uses — and adds the configured paths on top. With no pack installed, the CLI
+  prints the install hint and exits 1. `bricks init` still writes `paths: []`.
+  **Behaviour change:** before, a local brick in a configured path with the
+  same name as a stdlib brick was the one that ran. Now the pack's brick is
+  kept, the local one is not used, and the CLI prints
+  `Warning: local brick '<name>' has the same name as an installed pack brick;
+  the pack version wins and the local one is not used.` to stderr. Rename the
+  local brick to use it. (Whether config paths belong in D7 is still #27.)
+- **`bricks run -i key=value` passes the value as text when the blueprint
+  declares that input as `"str"`.** Before, every value went through
+  `json.loads`, so `-i crm_json='[...]'` reached `extract_json_from_str` as a
+  list and failed. Inputs not declared `"str"` are still parsed as JSON. The
+  README "Quick Start — CLI" now prints a command that runs. A `"str"` input
+  given in the old double-quoted form (`-i x='"..."'`) now keeps its quotes:
+  the brick gets `"..."`, quotes included, so drop the inner quotes. (#39)
 
 ## [0.5.0] - 2026-06-12
 
