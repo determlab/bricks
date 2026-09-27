@@ -23,7 +23,10 @@ At least one ``python`` and one ``bash`` block must be marked ``run``.
   The whole-line ``#`` comments right under a command (up to a blank line or the
   next command) are that command's expected output.
 
-The leading ``#`` and one space are dropped from each comment line. A command or
+The leading ``#`` and one space are dropped from each comment line. A ``#`` line
+in a ``bash`` run block that is not directly under a command (a blank line in
+between) fails the run, and so does a ``~~~`` or indented fence in a Quick Start
+section: either would otherwise be skipped without a word. A command or
 block with no comment lines under it is checked on its exit code only.
 
 **Pass/fail.** A step fails when it exits non-zero, or when its output (stdout
@@ -76,6 +79,8 @@ from pathlib import Path
 
 _SECTION = re.compile(r"^##\s+Quick Start\b")
 _FENCE = re.compile(r"^```\s*([\w-]*)\s*$")
+# A fence this runner does not read: a tilde fence, or a backtick fence with leading spaces.
+_ODD_FENCE = re.compile(r"^(\s+```|\s*~~~)")
 _MARKER = re.compile(r"^<!--\s*quickstart:\s*(run|skip)\s*-->$")
 RUN_LANGS = {"python", "bash"}
 
@@ -127,6 +132,11 @@ def quickstart_blocks(readme: str) -> list[Block]:
             in_section = bool(_SECTION.match(ln))
             sections += in_section
         m = _FENCE.match(ln)
+        if in_section and not m and _ODD_FENCE.match(ln):
+            raise ReadmeError(
+                f"README line {i + 1}: a Quick Start code block must open with ``` at the start of the "
+                "line (no ~~~, no indent), or this runner would skip it"
+            )
         if m and in_section:
             mark = _MARKER.match(last_text.strip())
             if not mark:
@@ -182,8 +192,12 @@ def plan(blocks: list[Block]) -> list[Step]:
             if not row.strip():
                 current = None
             elif row.startswith("#"):
-                if current is not None:
-                    current.expected = [*(current.expected or []), _comment(row)]
+                if current is None:
+                    raise ReadmeError(
+                        f"README line {line_no}: a `#` output line must sit directly under its command "
+                        "(no blank line between), or it would be silently ignored"
+                    )
+                current.expected = [*(current.expected or []), _comment(row)]
             else:
                 if row.rstrip().endswith("\\"):
                     raise ReadmeError(f"README line {line_no}: a continued command line is not supported")
@@ -329,6 +343,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL: {e}")
         _summary(f"README Quick Start FAILED: {str(e).splitlines()[0]}")
         return 1
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
     line = f"README Quick Start passed: wheel `pip install` to first success (README line {line_no}) in {secs:.1f} s"
     print(line)
     _summary(line)

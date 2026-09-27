@@ -53,29 +53,17 @@ echo two
 """
 
 
-def test_real_readme_plans_python_and_cli_with_shown_output() -> None:
-    steps = rr.plan(rr.quickstart_blocks((ROOT / "README.md").read_text(encoding="utf-8")))
-    py = [s for s in steps if s.kind == "python"]
-    sh = [s for s in steps if s.kind == "bash"]
-    assert len(py) == 1  # the explicit-registry block is marked skip
-    assert "run_blueprint(" in py[0].source
-    assert py[0].expected == ["{'active_count': 2, 'total_active_revenue': 7300, 'avg_active_revenue': 3650.0}"]
-    assert sh[0].source.startswith("bricks run blueprints/crm_pipeline.yaml -i crm_json='[")
-    assert sh[0].expected == [
-        "Blueprint 'crm_pipeline' completed.",
-        "Outputs:",
-        "  active_count: 2",
-        "  total_active_revenue: 7300",
-        "  avg_active_revenue: 3650.0",
-    ]
-    rest = [s.source.split("#")[0].strip() for s in sh[1:]]
-    assert rest == [
-        "bricks check blueprints/crm_pipeline.yaml",
-        "bricks list",
-        "bricks new brick my_brick",
-        "bricks store seed blueprints/",
-    ]
-    assert all(s.expected is None for s in sh[1:])
+def test_real_readme_has_a_runnable_python_and_cli_quick_start() -> None:
+    # Structure only. The README is the source: pinning its words here would be a
+    # copy of it, and a wording change by its owner would break the unit suite.
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    blocks = rr.quickstart_blocks(readme)  # raises if any Quick Start block lacks a marker
+    assert {b.marker for b in blocks} <= {"run", "skip"}
+    run_langs = {b.lang for b in blocks if b.marker == "run"}
+    assert {"python", "bash"} <= run_langs
+    steps = rr.plan(blocks)
+    for lang in ("python", "bash"):
+        assert any(s.kind == lang and s.expected and any(ln.strip() for ln in s.expected) for s in steps), lang
 
 
 def test_bash_output_belongs_to_the_command_above_it() -> None:
@@ -131,9 +119,22 @@ def test_continued_command_line_fails() -> None:
         rr.plan(rr.quickstart_blocks(_readme(PY_RUN, cont)))
 
 
+def test_blank_line_between_command_and_its_output_fails() -> None:
+    gap = f"## Quick Start\n\n<!-- quickstart: run -->\n{FENCE}bash\necho hi\n\n# hi\n{FENCE}\n"
+    with pytest.raises(rr.ReadmeError, match="directly under its command"):
+        rr.plan(rr.quickstart_blocks(_readme(PY_RUN, gap)))
+
+
+@pytest.mark.parametrize("fence", ["~~~bash", "  ```bash"])
+def test_tilde_or_indented_fence_in_quick_start_fails(fence: str) -> None:
+    odd = f"## Quick Start\n\n<!-- quickstart: run -->\n{fence}\necho hi\n{fence.strip()[:3]}\n"
+    with pytest.raises(rr.ReadmeError, match="no ~~~, no indent"):
+        rr.quickstart_blocks(_readme(PY_RUN, SH_RUN, odd))
+
+
 def test_output_match_ignores_crlf_and_trailing_space_only() -> None:
-    shown = ["Blueprint 'crm_pipeline' completed.", "  active_count: 2"]
-    assert rr.output_matches(shown, "Blueprint 'crm_pipeline' completed.  \r\n  active_count: 2\r\n\r\n")
-    assert not rr.output_matches(shown, "Blueprint 'crm_pipeline' finished.\n  active_count: 2\n")
-    assert not rr.output_matches(shown, "Blueprint 'crm_pipeline' completed.\nactive_count: 2\n")
-    assert not rr.output_matches(shown, "Blueprint 'crm_pipeline' completed.\n")
+    shown = ["Job 'x' done.", "  count: 2"]
+    assert rr.output_matches(shown, "Job 'x' done.  \r\n  count: 2\r\n\r\n")
+    assert not rr.output_matches(shown, "Job 'x' ended.\n  count: 2\n")
+    assert not rr.output_matches(shown, "Job 'x' done.\ncount: 2\n")
+    assert not rr.output_matches(shown, "Job 'x' done.\n")
