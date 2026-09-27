@@ -97,7 +97,7 @@ result = run_blueprint(yaml_string, inputs={...}, registry=registry)
 <!-- quickstart: run -->
 ```bash
 bricks run blueprints/crm_pipeline.yaml -i crm_json='[{"status": "active", "monthly_revenue": 4200}, {"status": "churned", "monthly_revenue": 1800}, {"status": "active", "monthly_revenue": 3100}]'
-# Blueprint 'crm_pipeline' completed.
+# Blueprint 'crm_pipeline' finished.
 # Outputs:
 #   active_count: 2
 #   total_active_revenue: 7300
