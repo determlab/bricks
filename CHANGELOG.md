@@ -27,6 +27,21 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Added
+- **`--json` on `bricks run`, `bricks check` and `bricks list`.** With the flag,
+  stdout is exactly one JSON document, for success and for failure; warnings,
+  and anything a brick prints, go to stderr, and exit codes are unchanged. A
+  broken `bricks.config.yaml` is a JSON error too (`ConfigError`). `run` prints
+  `{"ok": true, "blueprint", "outputs"}` or
+  `{"ok": false, "error": {"type", "message", "step"?, "brick"?}}`; `check`
+  prints `{"ok", "file", "errors": [...]}`; `list` prints
+  `{"ok": true, "bricks": [...]}` (name, first line of the description, tags,
+  category, input_keys, output_keys, destructive, idempotent). An output that
+  is not a JSON type is written as its `str()`, a tuple as a list. With
+  `--json`, `run` ignores `--verbosity`, and a `BrickError` other than a step
+  failure (an unknown brick) is a JSON error instead of a traceback. Without
+  the flag the output is byte-identical; `tests/cli/test_json_output.py` checks
+  it against output captured before the change. (#40)
+
 - **A selector measurement, with a recorded baseline.** `TieredCatalog` now has
   a test that runs one 30-task set against it twice — once with
   `CatalogConfig.common_set` holding all 101 stdlib bricks, once with the 14
