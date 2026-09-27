@@ -65,6 +65,7 @@ The base install ships:
 
 ## Quick Start — Python API
 
+<!-- quickstart: run -->
 ```python
 from bricks import run_blueprint
 
@@ -83,6 +84,7 @@ Run it a thousand times — same three numbers, every time. That's the point.
 
 Or with an explicit registry:
 
+<!-- quickstart: skip -->
 ```python
 from bricks import build_default_registry, run_blueprint
 
@@ -92,6 +94,7 @@ result = run_blueprint(yaml_string, inputs={...}, registry=registry)
 
 ## Quick Start — CLI
 
+<!-- quickstart: run -->
 ```bash
 bricks run blueprints/crm_pipeline.yaml -i crm_json='[{"status": "active", "monthly_revenue": 4200}, {"status": "churned", "monthly_revenue": 1800}, {"status": "active", "monthly_revenue": 3100}]'
 # Blueprint 'crm_pipeline' completed.
