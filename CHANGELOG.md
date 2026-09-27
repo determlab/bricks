@@ -27,6 +27,19 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Added
+- **CI runs the README Quick Start as printed.** A new `quickstart` job in
+  `.github/workflows/ci.yml` (ubuntu and windows) builds the wheel from the
+  commit, installs it in a clean venv, and runs the README's Quick Start blocks,
+  the Python one and the CLI one, from a temp dir holding a copy of
+  `blueprints/`. `dev/quickstart/run_readme.py` reads the commands from
+  `README.md`, so the job keeps no copy. A step fails on a non-zero exit, or when
+  its output differs from the `#` lines the README shows under it. The CLI block
+  runs in bash (Git Bash on Windows), because its JSON is single-quoted. The
+  seconds from `pip install` to the first success go into the job summary. The
+  README gains three HTML comments, `<!-- quickstart: run -->` and
+  `<!-- quickstart: skip -->`, that say which blocks run; the prose is unchanged.
+  (#41)
+
 - **`--json` on `bricks run`, `bricks check` and `bricks list`.** With the flag,
   stdout is exactly one JSON document, for success and for failure; warnings,
   and anything a brick prints, go to stderr, and exit codes are unchanged. A

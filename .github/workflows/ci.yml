@@ -41,3 +41,39 @@ jobs:
       - run: python -c "import sys, bricks; leaked = [m for m in sys.modules if m.startswith('bricks_ai') or m in ('litellm', 'anthropic', 'openai')]; assert not leaked, leaked"
       - run: bricks --help
       - run: pytest
+
+  quickstart:
+    # The README's Quick Start, run exactly as printed, the way a stranger runs
+    # it (#41, the shal#159 check): a clean venv, then the README's own blocks,
+    # in order. The job keeps no copy of the commands. dev/quickstart/run_readme.py
+    # reads them out of README.md: every block marked <!-- quickstart: run -->
+    # under a "## Quick Start" heading, the Python one and the CLI one. It fails
+    # when a step exits non-zero or prints something other than the output the
+    # README shows under it.
+    #
+    # bricks is not on PyPI, so the venv gets the wheel built from this commit
+    # (not the README's `pip install -e .` from a clone; git clone would test
+    # main, not the PR). The blocks run in a temp dir holding a copy of
+    # blueprints/, the part of the clone the Quick Start names. The CLI block runs
+    # in bash on both OSes (Git Bash on Windows): its JSON is single-quoted. The
+    # seconds from the wheel's pip install to the first success go into the job
+    # summary.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the wheel from this commit
+        run: |
+          pip install build
+          python -m build --wheel
+      - name: Clean venv (no dev deps, nothing installed)
+        run: python -m venv "${{ runner.temp }}/quickstart-venv"
+      - name: README Quick Start, as printed
+        shell: bash
+        run: python dev/quickstart/run_readme.py --venv "${{ runner.temp }}/quickstart-venv" --dist dist
