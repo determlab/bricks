@@ -3,11 +3,12 @@
 With ``--json`` a command writes exactly one JSON document to stdout, for
 success and for failure, with the same exit code as without it. Without the
 flag the output is byte-for-byte what it was before #40: the expected strings
-below were captured from the CLI before the flag existed, and ``bricks list``'s
-from ``tests/baselines/cli_list_human.txt``.
+below were captured from the CLI before the flag existed. ``bricks list`` is
+checked on a fixed two-brick registry, so the test pins the format and not
+the stdlib's descriptions.
 
-Each test runs the real CLI in a fresh interpreter from a clean temp directory,
-the same way as ``test_packs_loaded.py``.
+Most tests run the real CLI in a fresh interpreter from a clean temp
+directory, the same way as ``test_packs_loaded.py``.
 """
 
 from __future__ import annotations
@@ -24,11 +25,11 @@ import pytest
 from typer.testing import CliRunner
 
 from bricks.cli.main import app
+from bricks.core.brick import brick
+from bricks.core.registry import BrickRegistry
 from bricks.errors import BricksConfigError
 
-_REPO = Path(__file__).resolve().parents[2]
-_REPO_BLUEPRINT = _REPO / "blueprints" / "crm_pipeline.yaml"
-_LIST_BASELINE = _REPO / "tests" / "baselines" / "cli_list_human.txt"
+_REPO_BLUEPRINT = Path(__file__).resolve().parents[2] / "blueprints" / "crm_pipeline.yaml"
 
 _CRM_JSON = json.dumps(
     [
@@ -271,11 +272,112 @@ def test_list_json(work: Path) -> None:
         assert "\n" not in b["description"], b["name"]
 
 
-def test_list_human_output_unchanged(work: Path) -> None:
-    """Regenerate the baseline only if a brick's description changes on purpose."""
-    result = _bricks(work, "list")
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == _LIST_BASELINE.read_text(encoding="utf-8")
+def _two_bricks() -> BrickRegistry:
+    """A fixed registry, so the list format is tested without the stdlib's content."""
+
+    @brick(tags=["math", "demo"], description="Add two numbers.\n\n    Returns {result: sum}.")
+    def add(a: float, b: float) -> dict[str, float]:
+        return {"result": a + b}
+
+    @brick(destructive=True)
+    def wipe(path: str) -> dict[str, bool]:
+        return {"done": True}
+
+    reg = BrickRegistry()
+    for fn in (add, wipe):
+        reg.register(fn.__name__, fn, fn.__brick_meta__)  # type: ignore[attr-defined]
+    return reg
+
+
+def test_list_human_output_format_unchanged(work: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The text format of ``bricks list`` as it was before #40, on a fixed two-brick registry."""
+    monkeypatch.chdir(work)
+    monkeypatch.setattr("bricks.cli.main.build_default_registry", _two_bricks)
+    result = CliRunner().invoke(app, ["list"])
+    assert result.exit_code == 0
+    assert result.stdout == (
+        "Registered bricks (2):\n"
+        "  add [math, demo] - Add two numbers.\n"
+        "\n"
+        "    Returns {result: sum}.\n"
+        "  wipe [DESTRUCTIVE]\n"
+    )
+
+    as_json = CliRunner().invoke(app, ["list", "--json"])
+    assert as_json.exit_code == 0
+    assert [(b["name"], b["description"], b["destructive"]) for b in json.loads(as_json.stdout)["bricks"]] == [
+        ("add", "Add two numbers.", False),
+        ("wipe", "", True),
+    ]
+
+
+# --- a brick that prints ---------------------------------------------------
+
+
+def test_json_stdout_is_json_alone_when_a_brick_prints(work: Path) -> None:
+    """A local brick that prints at import and at run time: the text goes to stderr."""
+    (work / "lib").mkdir()
+    (work / "lib" / "noisy.py").write_text(
+        "from bricks.core import brick\n\n"
+        "print('noisy: imported')\n\n"
+        "@brick()\n"
+        "def noisy(x: int) -> dict[str, int]:\n"
+        "    print('noisy: running')\n"
+        "    return {'result': x}\n"
+    )
+    (work / "bricks.config.yaml").write_text("registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n")
+    (work / "noisy.yaml").write_text(
+        "name: noisy\n"
+        "steps:\n"
+        "  - name: s\n"
+        "    brick: noisy\n"
+        "    params: {x: 7}\n"
+        "    save_as: r\n"
+        "outputs_map:\n"
+        '  result: "${r.result}"\n'
+    )
+
+    ran = _bricks(work, "run", "noisy.yaml", "--json")
+    assert ran.returncode == 0, ran.stderr
+    assert _one_json(ran) == {"ok": True, "blueprint": "noisy", "outputs": {"result": 7}}
+    assert "noisy: imported" in ran.stderr
+    assert "noisy: running" in ran.stderr
+
+    checked = _bricks(work, "check", "noisy.yaml", "--json")
+    assert checked.returncode == 0, checked.stderr
+    assert _one_json(checked) == {"ok": True, "file": "noisy.yaml", "errors": []}
+    assert "noisy: imported" in checked.stderr
+
+    listed = _bricks(work, "list", "--json")
+    assert listed.returncode == 0, listed.stderr
+    assert "noisy" in {b["name"] for b in _one_json(listed)["bricks"]}
+    assert "noisy: imported" in listed.stderr
+
+
+# --- a bricks.config.yaml that cannot be read ------------------------------
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        "registry: [not, a, mapping\n",  # not YAML
+        "registry:\n  auto_discover: {not: a bool}\n",  # YAML, but fails the config model
+    ],
+)
+def test_json_when_config_is_broken(work: Path, config: str) -> None:
+    (work / "bricks.config.yaml").write_text(config)
+    for args in (["run", "blueprints/crm_pipeline.yaml"], ["list"]):
+        result = _bricks(work, *args, "--json")
+        assert result.returncode == 1
+        doc = _one_json(result)
+        assert doc["ok"] is False
+        assert doc["error"]["type"] == "ConfigError"
+        assert doc["error"]["message"]
+    checked = _bricks(work, "check", "blueprints/crm_pipeline.yaml", "--json")
+    assert checked.returncode == 1
+    doc = _one_json(checked)
+    assert doc["ok"] is False
+    assert len(doc["errors"]) == 1
 
 
 # --- a registry that cannot be built ---------------------------------------

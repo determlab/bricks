@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import os
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import typer
+from pydantic import ValidationError
 
 from bricks.api import build_default_registry
 from bricks.cli.check_env import check_env as _check_env_fn
@@ -20,6 +23,7 @@ from bricks.core.exceptions import (
     BlueprintValidationError,
     BrickError,
     BrickExecutionError,
+    ConfigError,
     YamlLoadError,
 )
 from bricks.core.loader import BlueprintLoader
@@ -69,14 +73,14 @@ def _json_error(error_type: str, message: str, **extra: str) -> dict[str, Any]:
     return {"ok": False, "error": {"type": error_type, "message": message, **extra}}
 
 
-def _emit_config_error(message: str) -> None:
-    """``--json`` report for a registry that cannot be built (``run`` and ``list``)."""
-    _emit_json(_json_error("BricksConfigError", message))
+def _emit_config_error(error_type: str, message: str) -> None:
+    """``--json`` report for a config or registry that cannot be built (``run`` and ``list``)."""
+    _emit_json(_json_error(error_type, message))
 
 
 def _setup_registry(
     config_dir: Path | None = None,
-    on_error: Callable[[str], None] | None = None,
+    on_error: Callable[[str, str], None] | None = None,
 ) -> tuple[BrickRegistry, BricksConfig]:
     """Load config and build the registry the CLI runs against.
 
@@ -88,22 +92,38 @@ def _setup_registry(
 
     Args:
         config_dir: Directory to search for bricks.config.yaml. Defaults to cwd.
-        on_error: Reports a registry that cannot be built instead of the
-            ``Error:`` line on stderr (``--json`` passes one). Exit 1 either way.
+        on_error: ``--json`` passes one. It is called with the error type and
+            message when the config or the registry cannot be built, and exit
+            is 1. While it is set, anything a brick module prints while loading
+            goes to stderr, so stdout carries the JSON alone. Without it, the
+            output is as before: ``Error:`` on stderr for no packs, and a bad
+            config raises.
 
     Returns:
         A tuple of (registry, config).
     """
-    loader = ConfigLoader()
-    config = loader.load(directory=config_dir)
+    guard = contextlib.redirect_stdout(sys.stderr) if on_error is not None else contextlib.nullcontext()
     try:
-        registry = build_default_registry()
+        with guard:
+            return _build_registry(config_dir)
     except BricksConfigError as exc:
         if on_error is not None:
-            on_error(str(exc))
+            on_error(type(exc).__name__, str(exc))
         else:
             typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
+    except (ConfigError, ValidationError) as exc:
+        if on_error is None:
+            raise
+        on_error(type(exc).__name__, str(exc))
+        raise typer.Exit(code=1) from exc
+
+
+def _build_registry(config_dir: Path | None) -> tuple[BrickRegistry, BricksConfig]:
+    """The body of :func:`_setup_registry`: load the config, then build the registry."""
+    loader = ConfigLoader()
+    config = loader.load(directory=config_dir)
+    registry = build_default_registry()
     if config.registry.auto_discover:
         local = BrickRegistry()
         discovery = BrickDiscovery(registry=local)
@@ -274,7 +294,7 @@ def check(
             typer.echo(f"Error loading YAML: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
-    registry, _ = _setup_registry(on_error=fail_json if json_output else None)
+    registry, _ = _setup_registry(on_error=(lambda _type, msg: fail_json(msg)) if json_output else None)
     validator = BlueprintValidator(registry=registry)
 
     try:
@@ -353,8 +373,10 @@ def run(
     if json_output:
         # Without --json, a BrickError other than BrickExecutionError (an unknown
         # brick, say) ends in a traceback; with it, it is a JSON error. Exit 1 both ways.
+        # What a brick prints goes to stderr, so stdout carries the JSON alone.
         try:
-            json_result = engine.run(bp_def, inputs=inputs or None, verbosity=verbosity)
+            with contextlib.redirect_stdout(sys.stderr):
+                json_result = engine.run(bp_def, inputs=inputs or None, verbosity=verbosity)
         except BrickExecutionError as exc:
             _emit_json(_json_error(type(exc).__name__, str(exc), step=exc.step_name, brick=exc.brick_name))
             raise typer.Exit(code=1) from exc

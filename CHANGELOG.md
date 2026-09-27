@@ -28,8 +28,9 @@ policy above holds from 0.2.0 onward.
 
 ### Added
 - **`--json` on `bricks run`, `bricks check` and `bricks list`.** With the flag,
-  stdout is exactly one JSON document, for success and for failure; warnings
-  stay on stderr and exit codes are unchanged. `run` prints
+  stdout is exactly one JSON document, for success and for failure; warnings,
+  and anything a brick prints, go to stderr, and exit codes are unchanged. A
+  broken `bricks.config.yaml` is a JSON error too (`ConfigError`). `run` prints
   `{"ok": true, "blueprint", "outputs"}` or
   `{"ok": false, "error": {"type", "message", "step"?, "brick"?}}`; `check`
   prints `{"ok", "file", "errors": [...]}`; `list` prints

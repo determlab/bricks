@@ -77,7 +77,8 @@ From Python:
 CLI (`bricks --help` lists all): `run`, `check`, `dry-run`, `list`, `init`, `new`,
 `store seed`, `store list`, `check-env`. `run`, `check` and `list` take `--json`:
 stdout is then exactly one JSON document, for success and for failure, with the
-same exit code as without it. Warnings stay on stderr. The other commands print
+same exit code as without it. Warnings, and anything a brick prints, go to
+stderr. The other commands print
 text only.
 
 ```bash
