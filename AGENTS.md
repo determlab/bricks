@@ -75,8 +75,30 @@ From Python:
   prints `103 __branch__` (101 stdlib bricks plus 2 DSL builtins).
 
 CLI (`bricks --help` lists all): `run`, `check`, `dry-run`, `list`, `init`, `new`,
-`store seed`, `store list`, `check-env`. **No command takes `--json`**; all print
-text. With `auto_discover: true`, the `paths` in `bricks.config.yaml` add local
+`store seed`, `store list`, `check-env`. `run`, `check` and `list` take `--json`:
+stdout is then exactly one JSON document, for success and for failure, with the
+same exit code as without it. Warnings stay on stderr. The other commands print
+text only.
+
+```bash
+bricks run blueprints/crm_pipeline.yaml -i crm_json='[]' --json
+```
+
+```
+{"ok": false, "error": {"type": "BrickExecutionError", "message": "Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0", "step": "avg_revenue", "brick": "divide"}}
+```
+
+Exit 1. With the three-row input from First success it prints
+`{"ok": true, "blueprint": "crm_pipeline", "outputs": {"active_count": 2, "total_active_revenue": 7300, "avg_active_revenue": 3650.0}}`.
+An output value that is not a JSON type (a date, a set, `NaN`) is written as its
+`str()`; a tuple becomes a list. `bricks check blueprints/crm_pipeline.yaml --json`
+prints `{"ok": true, "file": "blueprints/crm_pipeline.yaml", "errors": []}`; when
+not valid, `ok` is false and `errors` lists each problem. `bricks list --json`
+prints `{"ok": true, "bricks": [...]}`, one entry per brick with `name`,
+`description` (first line only), `tags`, `category`, `input_keys`, `output_keys`,
+`destructive` and `idempotent`.
+
+With `auto_discover: true`, the `paths` in `bricks.config.yaml` add local
 bricks on top of the packs. A local brick with a pack brick's name is not used, and
 the CLI prints a warning naming it to stderr. `compose`, `demo`, `serve` and
 `playground` need the separate `bricks-ai` package and an LLM.

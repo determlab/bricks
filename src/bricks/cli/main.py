@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import math
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -16,12 +18,14 @@ from bricks.core.discovery import BrickDiscovery
 from bricks.core.engine import BlueprintEngine
 from bricks.core.exceptions import (
     BlueprintValidationError,
+    BrickError,
     BrickExecutionError,
     YamlLoadError,
 )
 from bricks.core.loader import BlueprintLoader
 from bricks.core.models import Verbosity
 from bricks.core.registry import BrickRegistry
+from bricks.core.schema import brick_schema
 from bricks.core.validation import BlueprintValidator
 from bricks.errors import BricksConfigError
 
@@ -34,9 +38,45 @@ app = typer.Typer(
 new_app = typer.Typer(help="Scaffold new Bricks components.")
 app.add_typer(new_app, name="new")
 
+_JSON_HELP = "Print one JSON document to stdout instead of text."
+
+
+def _jsonable(value: Any) -> Any:
+    """Turn *value* into something ``json.dumps`` writes as strict JSON.
+
+    Dicts (keys as ``str``), lists and tuples (as lists) are walked; ``str``,
+    ``int``, ``bool``, ``None`` and finite ``float`` pass through. Anything else,
+    a ``NaN`` or infinite float included, is written as ``str(value)``.
+    """
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if value is None or isinstance(value, (str, int, bool)):
+        return value
+    if isinstance(value, float) and math.isfinite(value):
+        return value
+    return str(value)
+
+
+def _emit_json(doc: dict[str, Any]) -> None:
+    """Write *doc* to stdout as one JSON document."""
+    typer.echo(json.dumps(_jsonable(doc), allow_nan=False))
+
+
+def _json_error(error_type: str, message: str, **extra: str) -> dict[str, Any]:
+    """The ``--json`` failure shape shared by ``run`` and ``list``."""
+    return {"ok": False, "error": {"type": error_type, "message": message, **extra}}
+
+
+def _emit_config_error(message: str) -> None:
+    """``--json`` report for a registry that cannot be built (``run`` and ``list``)."""
+    _emit_json(_json_error("BricksConfigError", message))
+
 
 def _setup_registry(
     config_dir: Path | None = None,
+    on_error: Callable[[str], None] | None = None,
 ) -> tuple[BrickRegistry, BricksConfig]:
     """Load config and build the registry the CLI runs against.
 
@@ -48,6 +88,8 @@ def _setup_registry(
 
     Args:
         config_dir: Directory to search for bricks.config.yaml. Defaults to cwd.
+        on_error: Reports a registry that cannot be built instead of the
+            ``Error:`` line on stderr (``--json`` passes one). Exit 1 either way.
 
     Returns:
         A tuple of (registry, config).
@@ -57,7 +99,10 @@ def _setup_registry(
     try:
         registry = build_default_registry()
     except BricksConfigError as exc:
-        typer.echo(f"Error: {exc}", err=True)
+        if on_error is not None:
+            on_error(str(exc))
+        else:
+            typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     if config.registry.auto_discover:
         local = BrickRegistry()
@@ -199,32 +244,54 @@ def new_sequence(name: str = typer.Argument(..., help="Name of the sequence.")) 
 
 
 @app.command()
-def check(file: str = typer.Argument(..., help="Path to blueprint YAML file.")) -> None:
-    """Validate a blueprint YAML file (lint without executing)."""
+def check(
+    file: str = typer.Argument(..., help="Path to blueprint YAML file."),
+    json_output: bool = typer.Option(False, "--json", help=_JSON_HELP),
+) -> None:
+    """Validate a blueprint YAML file (lint without executing).
+
+    With --json: {"ok", "file", "errors": [str, ...]}; exit 1 when not ok.
+    """
     path = Path(file)
+
+    def fail_json(*errors: str) -> None:
+        _emit_json({"ok": False, "file": file, "errors": list(errors)})
+
     if not path.exists():
-        typer.echo(f"Error: File not found: {path}", err=True)
+        if json_output:
+            fail_json(f"File not found: {path}")
+        else:
+            typer.echo(f"Error: File not found: {path}", err=True)
         raise typer.Exit(code=1)
 
     bp_loader = BlueprintLoader()
     try:
         blueprint = bp_loader.load_file(path)
     except YamlLoadError as exc:
-        typer.echo(f"Error loading YAML: {exc}", err=True)
+        if json_output:
+            fail_json(f"Error loading YAML: {exc}")
+        else:
+            typer.echo(f"Error loading YAML: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
-    registry, _ = _setup_registry()
+    registry, _ = _setup_registry(on_error=fail_json if json_output else None)
     validator = BlueprintValidator(registry=registry)
 
     try:
         validator.validate(blueprint)
-        typer.echo(f"valid: {path}")
     except BlueprintValidationError as exc:
+        if json_output:
+            fail_json(*(exc.errors or [str(exc)]))
+            raise typer.Exit(code=1) from exc
         typer.echo(f"Validation errors in {path}:", err=True)
         if exc.errors:
             for error in exc.errors:
                 typer.echo(f"  - {error}", err=True)
         raise typer.Exit(code=1) from exc
+    if json_output:
+        _emit_json({"ok": True, "file": file, "errors": []})
+    else:
+        typer.echo(f"valid: {path}")
 
 
 @app.command()
@@ -236,24 +303,38 @@ def run(
     verbosity: Verbosity = typer.Option(  # noqa: B008
         Verbosity.MINIMAL, "--verbosity", "-v", help="Output detail level (minimal/standard/full)."
     ),
+    json_output: bool = typer.Option(False, "--json", help=_JSON_HELP + " Ignores --verbosity."),
 ) -> None:
-    """Execute a blueprint."""
+    """Execute a blueprint.
+
+    With --json: {"ok": true, "blueprint", "outputs"}, or on failure
+    {"ok": false, "error": {"type", "message", "step"?, "brick"?}} and exit 1.
+    """
     path = Path(sequence)
     if not path.exists():
-        typer.echo(f"Error: Blueprint file not found: {path}", err=True)
+        if json_output:
+            _emit_json(_json_error("FileNotFoundError", f"Blueprint file not found: {path}"))
+        else:
+            typer.echo(f"Error: Blueprint file not found: {path}", err=True)
         raise typer.Exit(code=1)
 
     bp_loader = BlueprintLoader()
     try:
         bp_def = bp_loader.load_file(path)
     except YamlLoadError as exc:
-        typer.echo(f"Error loading YAML: {exc}", err=True)
+        if json_output:
+            _emit_json(_json_error("YamlLoadError", str(exc)))
+        else:
+            typer.echo(f"Error loading YAML: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
     inputs: dict[str, object] = {}
     for item in input_:
         if "=" not in item:
-            typer.echo(f"Error: Invalid input format {item!r}. Use key=value.", err=True)
+            if json_output:
+                _emit_json(_json_error("InvalidInputError", f"Invalid input format {item!r}. Use key=value."))
+            else:
+                typer.echo(f"Error: Invalid input format {item!r}. Use key=value.", err=True)
             raise typer.Exit(code=1)
         k, v = item.split("=", 1)
         # An input the blueprint declares as "str" is passed as typed, so
@@ -266,8 +347,22 @@ def run(
         except json.JSONDecodeError:
             inputs[k] = v
 
-    registry, _ = _setup_registry()
+    registry, _ = _setup_registry(on_error=_emit_config_error if json_output else None)
     engine = BlueprintEngine(registry=registry)
+
+    if json_output:
+        # Without --json, a BrickError other than BrickExecutionError (an unknown
+        # brick, say) ends in a traceback; with it, it is a JSON error. Exit 1 both ways.
+        try:
+            json_result = engine.run(bp_def, inputs=inputs or None, verbosity=verbosity)
+        except BrickExecutionError as exc:
+            _emit_json(_json_error(type(exc).__name__, str(exc), step=exc.step_name, brick=exc.brick_name))
+            raise typer.Exit(code=1) from exc
+        except BrickError as exc:
+            _emit_json(_json_error(type(exc).__name__, str(exc)))
+            raise typer.Exit(code=1) from exc
+        _emit_json({"ok": True, "blueprint": bp_def.name, "outputs": json_result.outputs})
+        return
 
     try:
         exec_result = engine.run(bp_def, inputs=inputs or None, verbosity=verbosity)
@@ -329,10 +424,27 @@ def dry_run(
 
 
 @app.command(name="list")
-def list_bricks() -> None:
-    """List all available Bricks in the registry."""
-    registry, _ = _setup_registry()
+def list_bricks(
+    json_output: bool = typer.Option(False, "--json", help=_JSON_HELP),
+) -> None:
+    """List all available Bricks in the registry.
+
+    With --json: {"ok": true, "bricks": [{"name", "description" (first line),
+    "tags", "category", "destructive", "idempotent", "input_keys", "output_keys"}]}.
+    """
+    registry, _ = _setup_registry(on_error=_emit_config_error if json_output else None)
     all_bricks = registry.list_all()
+
+    if json_output:
+        entries = []
+        for name, _meta in all_bricks:
+            schema = brick_schema(name, registry)
+            del schema["parameters"]
+            lines = str(schema["description"]).strip().splitlines()
+            schema["description"] = lines[0] if lines else ""
+            entries.append(schema)
+        _emit_json({"ok": True, "bricks": entries})
+        return
 
     if not all_bricks:
         typer.echo("No bricks registered. Check your bricks.config.yaml registry paths.")
