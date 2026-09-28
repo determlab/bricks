@@ -27,6 +27,17 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Added
+- **The `measure` brick.** `(name, value, unit, min=None, max=None)` returns one
+  measurement row with a pass flag: `{result: {name, value, unit, limits, pass}}`.
+  `limits` holds only the bounds given (`{}` when neither is given); bounds are
+  inclusive; a non-finite `value` (NaN, infinity) is `pass: false`; `min > max`
+  raises `ValueError` naming both numbers. It never raises on a failing value —
+  it returns `pass: false` so a run can continue and a verdict be derived from
+  every row. Pure: no I/O, no clock, no random. New category `measurement`,
+  bringing the stdlib to 102 bricks. Out of scope here: the run verdict,
+  `--unit`, writing a record, and adding `measure` to `DEFAULT_COMMON_SET`
+  (a D15 change). (#48)
+
 - **CI runs the README Quick Start as printed.** A new `quickstart` job in
   `.github/workflows/ci.yml` (ubuntu and windows) builds the wheel from the
   commit, installs it in a clean venv, and runs the README's Quick Start blocks,

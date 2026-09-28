@@ -1,4 +1,4 @@
-"""Selector measurement: the full 101-brick registry vs the 14-brick common set.
+"""Selector measurement: the full 102-brick registry vs the 14-brick common set.
 
 `ops/projects/shal/specs/tool-set.md` R6 and `ops/projects/bricks/specs/block-set.md`
 both say the same thing: the "sweet spot 12-16, ceiling 20" range is borrowed
@@ -16,7 +16,7 @@ The selector under test is :class:`~bricks.core.catalog.TieredCatalog`:
 
 The same 30-task set is run twice against a real stdlib registry:
 
-* ``full``   — ``common_set`` is every registered brick, so Tier 1 lists all 101.
+* ``full``   — ``common_set`` is every registered brick, so Tier 1 lists all 102.
 * ``common`` — ``common_set`` is the 14 names ``block-set.md`` marks
   "Keep visible, unchanged".
 
@@ -31,7 +31,7 @@ catalog a caller is shown, whether the right brick is in that listing, how many
 same-keyword rivals sit beside it, and whether one Tier-2 search recovers a miss.
 The `full` hit-rate is 100% by construction (everything is listed); precision
 there is by construction too, since every task has exactly one expected brick,
-so mean precision is exactly 1 / listing-size (0.0099 = 1/101, 0.0714 = 1/14) -
+so mean precision is exactly 1 / listing-size (0.0098 = 1/102, 0.0714 = 1/14) -
 it just restates how big the listing is. The rival count is the informative
 number.
 
@@ -140,7 +140,7 @@ TASKS: tuple[Task, ...] = (
 
 
 def _stdlib_registry() -> BrickRegistry:
-    """A registry holding the whole stdlib — the real 101, not stubs."""
+    """A registry holding the whole stdlib — the real 102, not stubs."""
     registry = BrickRegistry()
     register(registry)
     return registry
@@ -217,7 +217,7 @@ def build_report() -> str:
     total = len(TASKS)
 
     lines: list[str] = [
-        "# Selector measurement: 101 bricks vs 14 (Auto-Generated)",
+        "# Selector measurement: 102 bricks vs 14 (Auto-Generated)",
         "",
         "Do not hand-edit. Regenerate with:",
         "",
@@ -312,9 +312,9 @@ def test_common_set_is_fourteen_real_bricks() -> None:
     assert not missing, f"common_set names bricks that are not registered: {missing}"
 
 
-def test_registry_is_still_one_hundred_and_one() -> None:
-    """The 101 in the spec is the population under test; if it moves, so does the result."""
-    assert len(_stdlib_registry().list_all()) == 101
+def test_registry_is_still_one_hundred_and_two() -> None:
+    """The 102 in the spec is the population under test; if it moves, so does the result."""
+    assert len(_stdlib_registry().list_all()) == 102
 
 
 def test_task_set_covers_both_directions() -> None:
@@ -373,7 +373,7 @@ def test_baseline_is_current() -> None:
 def test_headline_numbers() -> None:
     """The two numbers the issue asks for, asserted where a reader will see them.
 
-    Full registry lists all 101 and therefore hits every task; the common set
+    Full registry lists all 102 and therefore hits every task; the common set
     lists 14 and hits fewer than half. Neither number is a surprise — the point
     is the pair, and the cost column beside it.
     """
@@ -386,9 +386,9 @@ def test_headline_numbers() -> None:
     assert sum(r.hit for r in full) == 30, "full registry lists everything, so it cannot miss"
     assert sum(r.hit for r in common) == 14, "14 of 30 tasks have an answer inside the common set"
 
-    # The cost of that recall: at 101 the caller reads 7.2x more of the catalog
+    # The cost of that recall: at 102 the caller reads 7.3x more of the catalog
     # and sits beside far more same-keyword rivals.
-    assert full[0].listed == 101
+    assert full[0].listed == 102
     assert common[0].listed == 14
     assert sum(r.rivals for r in full) > 4 * sum(r.rivals for r in common)
 
@@ -408,7 +408,7 @@ def test_a_broad_query_pushes_the_two_step_surface_past_the_ceiling() -> None:
 
     `tool-set.md` R1 caps a model-facing listing at 20. Tier 1 at 14 respects it,
     but `lookup_brick` returns every substring match with no cap, so a broad query
-    ("date" matches 19 of 101) hands back a combined surface of 31 — above the
+    ("date" matches 19 of 102) hands back a combined surface of 31 — above the
     ceiling the small common set was chosen to hold. The ceiling therefore has to
     apply to the search result too, not only to the listing. Out of scope here
     (this issue is test-only and `src/` must not move); worth R2/R3 knowing.

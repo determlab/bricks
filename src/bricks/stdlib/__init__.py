@@ -1,7 +1,7 @@
 """bricks-stdlib — Standard library of reusable bricks for the Bricks engine.
 
-95 bricks across 7 categories, auto-registered via the ``bricks.packs`` entry
-point when ``bricks-stdlib`` is installed alongside ``bricks``.
+102 bricks across 8 categories, auto-registered via the ``bricks.packs``
+entry point when ``bricks-stdlib`` is installed alongside ``bricks``.
 
 Usage (direct)::
 
@@ -21,6 +21,7 @@ from bricks.stdlib import (
     encoding_security,
     list_operations,
     math_numeric,
+    measurement,
     string_processing,
     validation,
 )
@@ -37,10 +38,10 @@ def register(registry: BrickRegistry) -> None:
 
     Args:
         registry: The :class:`~bricks.core.registry.BrickRegistry` to
-            populate with all 95 stdlib bricks across 7 categories:
-            data_transformation (25), string_processing (20),
-            math_numeric (10), date_time (10), validation (10),
-            list_operations (10), encoding_security (10).
+            populate with all 102 stdlib bricks across 8 categories:
+            data_transformation (26), string_processing (21),
+            math_numeric (11), date_time (11), validation (10),
+            list_operations (11), encoding_security (11), measurement (1).
     """
     modules = [
         data_transformation,
@@ -50,6 +51,7 @@ def register(registry: BrickRegistry) -> None:
         validation,
         list_operations,
         encoding_security,
+        measurement,
     ]
 
     for module in modules:
