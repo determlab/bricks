@@ -253,7 +253,7 @@ def test_list_json(work: Path) -> None:
     doc = _one_json(result)
     assert doc["ok"] is True
     bricks = doc["bricks"]
-    assert len(bricks) == 103
+    assert len(bricks) == 104
     by_name = {b["name"]: b for b in bricks}
     entry = by_name["absolute_value"]
     # output_keys is whatever bricks.core.schema.brick_schema reports (empty for

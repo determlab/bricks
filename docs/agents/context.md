@@ -41,7 +41,7 @@ src/bricks/core/brick.py      The @brick decorator. Attaches __brick_meta__; the
 src/bricks/core/dsl.py        The @flow Python DSL — traces the function once; dag_builder.py
   + dag*.py                   linearises the DAG into the same step list YAML would produce.
 src/bricks/packs.py           Entry-point discovery for the `bricks.packs` group (D7).
-src/bricks/stdlib/            101 public bricks across 7 modules; +2 DSL builtins in core/builtins.py.
+src/bricks/stdlib/            102 public bricks across 8 modules; +2 DSL builtins in core/builtins.py.
 src/bricks/cli/main.py        The typer CLI. AI commands import lazily behind gates (D3).
 src/bricks/store/             The blueprint cache (file or in-memory).
 tests/                        850 tests, pytest only.

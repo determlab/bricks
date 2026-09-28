@@ -43,7 +43,7 @@ Outputs:
 
 Exit 0. The numbers never change between runs. The CLI loads every installed brick
 pack (the stdlib included) with no config: `bricks list` prints
-`Registered bricks (103):`. `bricks run` does not validate before it runs
+`Registered bricks (104):`. `bricks run` does not validate before it runs
 ([G8 in docs/DECISIONS.md](docs/DECISIONS.md)), so run `bricks check <file>` first.
 
 The same run through the Python API, which validates, then runs:
@@ -72,7 +72,7 @@ From Python:
   python -c "import bricks; from bricks.core.schema import registry_schema; s = registry_schema(bricks.build_default_registry()); print(len(s), s[0]['name'])"
   ```
 
-  prints `103 __branch__` (101 stdlib bricks plus 2 DSL builtins).
+  prints `104 __branch__` (102 stdlib bricks plus 2 DSL builtins).
 
 CLI (`bricks --help` lists all): `run`, `check`, `dry-run`, `list`, `init`, `new`,
 `store seed`, `store list`, `check-env`. `run`, `check` and `list` take `--json`:
