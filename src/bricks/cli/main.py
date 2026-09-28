@@ -432,8 +432,7 @@ def _resolve_check_targets(target: str) -> list[CheckTarget]:
     except Exception as exc:
         raise CheckBrickLoadError(f"{target!r}.register() raised {type(exc).__name__}: {exc}") from exc
     targets = [
-        CheckTarget(name=name, callable_=local.get(name)[0], meta=meta, problems=[])
-        for name, meta in local.list_all()
+        CheckTarget(name=name, callable_=local.get(name)[0], meta=meta, problems=[]) for name, meta in local.list_all()
     ]
     if not targets:
         raise CheckBrickLoadError(f"{target!r} registered no bricks.")
