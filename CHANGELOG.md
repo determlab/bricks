@@ -27,6 +27,22 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Added
+- **`bricks run`: a pass/fail verdict and `--unit`.** `run` takes `--unit ID`
+  (default `bench`, never blank), and reports a verdict derived from the
+  run — never set by hand (ops `record.md` §2): `fail` if any `measure` step
+  returned `pass: false` or a guard stopped the run (`GuardFailedError`),
+  `error` if any other `BrickError` ended it, `pass` otherwise. Exit 0 on
+  pass, 1 on fail or error, like pytest. Text mode gains a last line,
+  `Verdict: PASS (unit bench)` or `Verdict: FAIL (unit SN-2): vout 4.7 V not
+  in [4.9, 5.1]`; a `GuardFailedError` no longer tracebacks in text mode. `--json`
+  gains `unit`, `verdict` and `measurements` (one row per `measure` step
+  that ran); a guard failure is `"ok": true, "verdict": "fail"` (the run did
+  what it should), any other error keeps the existing `"ok": false` shape
+  and adds `"unit"`/`"verdict": "error"`. New `src/bricks/verdict.py`
+  (`derive_verdict`, pure, reads only `measure` steps in a completed
+  `ExecutionResult`). Neither `src/bricks/core/engine.py` nor
+  `src/bricks/api.py` changed. (#49, ops `record.md` §2 and §3)
+
 - **`measure` brick: one measurement row with a pass verdict.** New stdlib
   brick `measure(name, value, unit, min=None, max=None)` returns
   `{result: {name, value, unit, limits, pass}}`. `limits` holds only the

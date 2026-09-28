@@ -80,6 +80,9 @@ def test_run_json_success(work: Path) -> None:
     assert _one_json(result) == {
         "ok": True,
         "blueprint": "crm_pipeline",
+        "unit": "bench",
+        "verdict": "pass",
+        "measurements": [],
         "outputs": {"active_count": 2, "total_active_revenue": 7300, "avg_active_revenue": 3650.0},
     }
 
@@ -93,17 +96,20 @@ def test_run_json_step_failure_names_step_and_brick(work: Path) -> None:
     assert doc["error"]["step"] == "avg_revenue"
     assert doc["error"]["brick"] == "divide"
     assert doc["error"]["message"] == ("Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0")
+    # #49: any other BrickError ending the run is verdict "error", ok stays false.
+    assert doc["unit"] == "bench"
+    assert doc["verdict"] == "error"
 
 
 @pytest.mark.parametrize(
-    ("args", "error_type"),
+    ("args", "error_type", "reaches_engine"),
     [
-        (["missing.yaml"], "FileNotFoundError"),
-        (["blueprints/crm_pipeline.yaml", "-i", "novalue"], "InvalidInputError"),
-        (["bad.yaml"], "BrickNotFoundError"),
+        (["missing.yaml"], "FileNotFoundError", False),
+        (["blueprints/crm_pipeline.yaml", "-i", "novalue"], "InvalidInputError", False),
+        (["bad.yaml"], "BrickNotFoundError", True),
     ],
 )
-def test_run_json_other_failures(work: Path, args: list[str], error_type: str) -> None:
+def test_run_json_other_failures(work: Path, args: list[str], error_type: str, reaches_engine: bool) -> None:
     result = _bricks(work, "run", *args, "--json")
     assert result.returncode == 1
     doc = _one_json(result)
@@ -111,6 +117,15 @@ def test_run_json_other_failures(work: Path, args: list[str], error_type: str) -
     assert doc["error"]["type"] == error_type
     assert doc["error"]["message"]
     assert "step" not in doc["error"]
+    # "unit"/"verdict" only make sense once a run was attempted (bad.yaml fails
+    # inside engine.run() on the unknown brick); a failure before that — a
+    # missing file or a bad -i — never touches the engine.
+    if reaches_engine:
+        assert doc["unit"] == "bench"
+        assert doc["verdict"] == "error"
+    else:
+        assert "unit" not in doc
+        assert "verdict" not in doc
 
 
 def test_run_json_yaml_error(work: Path) -> None:
@@ -159,18 +174,22 @@ def test_run_json_non_serialisable_outputs_fall_back_to_str(work: Path) -> None:
 
 
 def test_run_human_output_unchanged(work: Path) -> None:
+    """Byte-for-byte as before #40, plus the "Verdict: ..." line #49 adds."""
     ok = _bricks(work, "run", "blueprints/crm_pipeline.yaml", "-i", f"crm_json={_CRM_JSON}")
     assert (ok.returncode, ok.stdout, ok.stderr) == (
         0,
         "Blueprint 'crm_pipeline' completed.\nOutputs:\n"
-        "  active_count: 2\n  total_active_revenue: 7300\n  avg_active_revenue: 3650.0\n",
+        "  active_count: 2\n  total_active_revenue: 7300\n  avg_active_revenue: 3650.0\n"
+        "Verdict: PASS (unit bench)\n",
         "",
     )
     failed = _bricks(work, "run", "blueprints/crm_pipeline.yaml", "-i", "crm_json=[]")
     assert (failed.returncode, failed.stdout, failed.stderr) == (
         1,
         "",
-        "Execution error: Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0\n",
+        "Execution error: Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0\n"
+        "Verdict: ERROR (unit bench): "
+        "Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0\n",
     )
     missing = _bricks(work, "run", "missing.yaml")
     assert (missing.returncode, missing.stdout, missing.stderr) == (
@@ -339,7 +358,14 @@ def test_json_stdout_is_json_alone_when_a_brick_prints(work: Path) -> None:
 
     ran = _bricks(work, "run", "noisy.yaml", "--json")
     assert ran.returncode == 0, ran.stderr
-    assert _one_json(ran) == {"ok": True, "blueprint": "noisy", "outputs": {"result": 7}}
+    assert _one_json(ran) == {
+        "ok": True,
+        "blueprint": "noisy",
+        "unit": "bench",
+        "verdict": "pass",
+        "measurements": [],
+        "outputs": {"result": 7},
+    }
     assert "noisy: imported" in ran.stderr
     assert "noisy: running" in ran.stderr
 
