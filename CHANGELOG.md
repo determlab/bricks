@@ -27,6 +27,40 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Added
+- **`bricks run`: a pass/fail/error verdict and `--unit`.** New option
+  `--unit ID` (default `"bench"`, never blank — record.md §2), and a verdict
+  derived after the run, never set by hand: `verdict = fail` if any `measure`
+  step returned `pass: false`, or a guard failed (`GuardFailedError`);
+  `verdict = error` if any other `BrickError` ended the run; else
+  `verdict = pass`. Exit code is 0 on pass, 1 on fail or error, so the same
+  blueprint run again with a different `--unit` gives an independent
+  pass/fail for the next unit. New `src/bricks/verdict.py`:
+  `derive_verdict(result: ExecutionResult) -> Verdict`, pure — it reads
+  `ExecutionResult.steps` for rows a `measure` step produced; it does not run
+  anything and does not see a failed guard or another `BrickError`, since
+  those end the run before an `ExecutionResult` exists (the CLI turns those
+  into a `Verdict` itself). To read `measure` outputs, `bricks run` now runs
+  the engine at `Verbosity.STANDARD` internally when the caller asked for
+  `--verbosity minimal` (the default) — `--verbosity` still controls what the
+  CLI *prints*; the engine itself is unchanged.
+
+  `--json` on `run` gains three keys: `unit`, `verdict`, and `measurements`
+  (one row per `measure` step: `step`, `name`, `value`, `unit`, `limits`,
+  `pass`).
+  ```
+  {"ok": true, "blueprint": "psu_limits", "unit": "SN-2", "verdict": "fail",
+   "measurements": [{"step": "vout", "name": "vout", "value": 4.7, "unit": "V", "limits": {"min": 4.9, "max": 5.1}, "pass": false}],
+   "outputs": {...}}
+  ```
+  A failed guard is `"ok": true, "verdict": "fail"` (the run did what it
+  should: it stopped a bad unit); an error keeps the existing `"ok": false`
+  shape and adds `"unit"` and `"verdict": "error"`. Without `--json`, `run`
+  prints one last line: `Verdict: PASS (unit bench)` or
+  `Verdict: FAIL (unit SN-2): vout 4.7 V not in [4.9, 5.1]`.
+
+  Out of scope, and untouched: writing a record file, `run_blueprint()` in
+  `api.py`, and the engine itself. (#49, ops `record.md` §2 and §3)
+
 - **`measure` brick: one measurement row with a pass verdict.** New stdlib
   brick `measure(name, value, unit, min=None, max=None)` returns
   `{result: {name, value, unit, limits, pass}}`. `limits` holds only the

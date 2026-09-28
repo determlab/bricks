@@ -39,6 +39,7 @@ Outputs:
   active_count: 2
   total_active_revenue: 7300
   avg_active_revenue: 3650.0
+Verdict: PASS (unit bench)
 ```
 
 Exit 0. The numbers never change between runs. The CLI loads every installed brick
@@ -86,11 +87,11 @@ bricks run blueprints/crm_pipeline.yaml -i crm_json='[]' --json
 ```
 
 ```
-{"ok": false, "error": {"type": "BrickExecutionError", "message": "Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0", "step": "avg_revenue", "brick": "divide"}}
+{"ok": false, "error": {"type": "BrickExecutionError", "message": "Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0", "step": "avg_revenue", "brick": "divide"}, "unit": "bench", "verdict": "error"}
 ```
 
 Exit 1. With the three-row input from First success it prints
-`{"ok": true, "blueprint": "crm_pipeline", "outputs": {"active_count": 2, "total_active_revenue": 7300, "avg_active_revenue": 3650.0}}`.
+`{"ok": true, "blueprint": "crm_pipeline", "unit": "bench", "verdict": "pass", "measurements": [], "outputs": {"active_count": 2, "total_active_revenue": 7300, "avg_active_revenue": 3650.0}}`.
 An output value that is not a JSON type (a date, a set, `NaN`) is written as its
 `str()`; a tuple becomes a list. `bricks check blueprints/crm_pipeline.yaml --json`
 prints `{"ok": true, "file": "blueprints/crm_pipeline.yaml", "errors": []}`; when
@@ -98,6 +99,20 @@ not valid, `ok` is false and `errors` lists each problem. `bricks list --json`
 prints `{"ok": true, "bricks": [...]}`, one entry per brick with `name`,
 `description` (first line only), `tags`, `category`, `input_keys`, `output_keys`,
 `destructive` and `idempotent`.
+
+`bricks run` also takes `--unit ID` (default `bench`, never blank) and derives a
+pass/fail/error verdict — record.md §2: the verdict is derived, never set by
+hand. `verdict` is `"fail"` if any `measure` step returned `pass: false`, or a
+guard failed; `"error"` if any other brick error ended the run; else `"pass"`.
+Exit code is 0 on pass, 1 on fail or error — run the same blueprint again with
+a different `--unit` for the next unit under test. `--json` on `run` gains
+`unit`, `verdict` and `measurements` (one row per `measure` step: `step`,
+`name`, `value`, `unit`, `limits`, `pass`) alongside the existing keys. A
+failed guard is still `"ok": true` (the run did what it should: it stopped a
+bad unit) with `"verdict": "fail"`; any other error keeps the `"ok": false`
+shape above and adds `"verdict": "error"`. Without `--json`, `run` prints one
+last line: `Verdict: PASS (unit bench)` or
+`Verdict: FAIL (unit SN-2): vout 4.7 V not in [4.9, 5.1]`.
 
 With `auto_discover: true`, the `paths` in `bricks.config.yaml` add local
 bricks on top of the packs. A local brick with a pack brick's name is not used, and

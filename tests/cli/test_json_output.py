@@ -80,6 +80,9 @@ def test_run_json_success(work: Path) -> None:
     assert _one_json(result) == {
         "ok": True,
         "blueprint": "crm_pipeline",
+        "unit": "bench",
+        "verdict": "pass",
+        "measurements": [],
         "outputs": {"active_count": 2, "total_active_revenue": 7300, "avg_active_revenue": 3650.0},
     }
 
@@ -89,6 +92,8 @@ def test_run_json_step_failure_names_step_and_brick(work: Path) -> None:
     assert result.returncode == 1
     doc = _one_json(result)
     assert doc["ok"] is False
+    assert doc["unit"] == "bench"
+    assert doc["verdict"] == "error"
     assert doc["error"]["type"] == "BrickExecutionError"
     assert doc["error"]["step"] == "avg_revenue"
     assert doc["error"]["brick"] == "divide"
@@ -100,15 +105,30 @@ def test_run_json_step_failure_names_step_and_brick(work: Path) -> None:
     [
         (["missing.yaml"], "FileNotFoundError"),
         (["blueprints/crm_pipeline.yaml", "-i", "novalue"], "InvalidInputError"),
-        (["bad.yaml"], "BrickNotFoundError"),
     ],
 )
 def test_run_json_other_failures(work: Path, args: list[str], error_type: str) -> None:
+    """These fail before a run is attempted (bad path, bad -i syntax): no unit/verdict, unchanged from #40."""
     result = _bricks(work, "run", *args, "--json")
     assert result.returncode == 1
     doc = _one_json(result)
     assert doc["ok"] is False
     assert doc["error"]["type"] == error_type
+    assert doc["error"]["message"]
+    assert "step" not in doc["error"]
+    assert "unit" not in doc
+    assert "verdict" not in doc
+
+
+def test_run_json_brick_not_found_is_error_verdict(work: Path) -> None:
+    """Unlike the failures above, this one reaches the engine, so it gets a verdict (#49)."""
+    result = _bricks(work, "run", "bad.yaml", "--json")
+    assert result.returncode == 1
+    doc = _one_json(result)
+    assert doc["ok"] is False
+    assert doc["unit"] == "bench"
+    assert doc["verdict"] == "error"
+    assert doc["error"]["type"] == "BrickNotFoundError"
     assert doc["error"]["message"]
     assert "step" not in doc["error"]
 
@@ -159,17 +179,19 @@ def test_run_json_non_serialisable_outputs_fall_back_to_str(work: Path) -> None:
 
 
 def test_run_human_output_unchanged(work: Path) -> None:
+    """Base text output is unchanged from before #40; #49 adds a trailing Verdict line."""
     ok = _bricks(work, "run", "blueprints/crm_pipeline.yaml", "-i", f"crm_json={_CRM_JSON}")
     assert (ok.returncode, ok.stdout, ok.stderr) == (
         0,
         "Blueprint 'crm_pipeline' completed.\nOutputs:\n"
-        "  active_count: 2\n  total_active_revenue: 7300\n  avg_active_revenue: 3650.0\n",
+        "  active_count: 2\n  total_active_revenue: 7300\n  avg_active_revenue: 3650.0\n"
+        "Verdict: PASS (unit bench)\n",
         "",
     )
     failed = _bricks(work, "run", "blueprints/crm_pipeline.yaml", "-i", "crm_json=[]")
     assert (failed.returncode, failed.stdout, failed.stderr) == (
         1,
-        "",
+        "Verdict: ERROR (unit bench): Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0\n",
         "Execution error: Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0\n",
     )
     missing = _bricks(work, "run", "missing.yaml")
@@ -339,7 +361,14 @@ def test_json_stdout_is_json_alone_when_a_brick_prints(work: Path) -> None:
 
     ran = _bricks(work, "run", "noisy.yaml", "--json")
     assert ran.returncode == 0, ran.stderr
-    assert _one_json(ran) == {"ok": True, "blueprint": "noisy", "outputs": {"result": 7}}
+    assert _one_json(ran) == {
+        "ok": True,
+        "blueprint": "noisy",
+        "unit": "bench",
+        "verdict": "pass",
+        "measurements": [],
+        "outputs": {"result": 7},
+    }
     assert "noisy: imported" in ran.stderr
     assert "noisy: running" in ran.stderr
 
