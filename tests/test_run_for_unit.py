@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from bricks import RunOutcome, run_for_unit
+from bricks import RunOutcome, build_default_registry, run_for_unit
+from bricks.core.brick import brick
 from bricks.core.exceptions import BrickExecutionError, GuardFailedError
 
 _PSU = Path(__file__).resolve().parent.parent / "blueprints" / "psu_limits.yaml"
@@ -22,6 +23,22 @@ _GUARDED_YAML = (
 )
 
 _MISSING_BRICK_YAML = "name: missing\nsteps:\n  - name: s\n    brick: no_such_brick\n    params: {}\noutputs_map: {}\n"
+
+
+@brick()
+def is_within(value: float, min: float, max: float) -> bool:
+    """Return whether value is within [min, max]."""
+    return min <= value <= max
+
+
+def _registry_with_is_within():
+    # `is_within` is not a stdlib brick — the default registry doesn't have
+    # it, so `_GUARDED_YAML`'s guard step would hit BrickNotFoundError and
+    # the run would read "error" instead of exercising the guard-failure
+    # path this test is actually for.
+    registry = build_default_registry()
+    registry.register("is_within", is_within, is_within.__brick_meta__)
+    return registry
 
 
 def test_psu_pass() -> None:
@@ -46,7 +63,7 @@ def test_default_unit_is_bench() -> None:
 
 
 def test_guard_failure_is_fail_not_raise() -> None:
-    out = run_for_unit(_GUARDED_YAML)
+    out = run_for_unit(_GUARDED_YAML, registry=_registry_with_is_within())
     assert out.verdict.status == "fail"
     assert out.result is None
     assert isinstance(out.error, GuardFailedError)
