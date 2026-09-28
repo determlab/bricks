@@ -86,14 +86,16 @@ class TestNewBrickCommand:
         brick_file = bricks_lib / "my_test_brick.py"
         assert brick_file.exists(), f"Expected {brick_file} to exist"
 
-    def test_new_brick_content_has_class(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_new_brick_content_has_function(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         (tmp_path / "bricks_lib").mkdir()
         runner.invoke(app, ["new", "brick", "my_test_brick"])
         content = (tmp_path / "bricks_lib" / "my_test_brick.py").read_text()
-        assert "class MyTestBrick(BaseBrick)" in content, "Expected class definition in content"
-        assert 'name = "my_test_brick"' in content, "Expected name attribute in content"
-        assert "def execute" in content, "Expected execute method in content"
+        assert "@brick(" in content, "Expected the @brick(...) decorator in content"
+        assert "def my_test_brick(" in content, "Expected a plain function definition in content"
+        assert "destructive=False" in content, "Expected destructive= set explicitly in content"
+        assert "idempotent=True" in content, "Expected idempotent= set explicitly in content"
+        assert "BaseBrick" not in content, "Scaffold must not use BaseBrick (D5)"
 
     def test_new_brick_normalises_name_hyphens(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
@@ -128,10 +130,15 @@ class TestNewBrickCommand:
         (tmp_path / "bricks_lib").mkdir()
         runner.invoke(app, ["new", "brick", "import_check"])
         content = (tmp_path / "bricks_lib" / "import_check.py").read_text()
-        assert "from bricks.core import" in content, "Expected bricks.core import in content"
-        assert "BaseBrick" in content, "Expected BaseBrick in content"
-        assert "BrickMeta" in content, "Expected BrickMeta in content"
-        assert "BrickModel" in content, "Expected BrickModel in content"
+        assert "from bricks.core.brick import brick" in content, "Expected the brick decorator import in content"
+
+    def test_new_brick_prints_check_brick_command(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "bricks_lib").mkdir()
+        result = runner.invoke(app, ["new", "brick", "checkable"])
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+        assert "bricks check-brick" in result.output, "Expected a check-brick hint in output"
+        assert "checkable.py:checkable" in result.output, "Expected the module:func target in output"
 
 
 class TestNewBlueprintCommand:
