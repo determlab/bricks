@@ -27,6 +27,9 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Added
+- **`blueprints/psu_limits.yaml`: the first test blueprint.** Three `measure`
+  steps (`vout`, `iout`, `ripple_pp`) over input values, no hardware; a
+  passing and a failing unit are shown in AGENTS.md. (#50)
 - **`bricks check-brick`: the ADK check for a brick, plus a function-brick scaffold.**
   `bricks check-brick <pack|module:func> [--json]` tells a brick author whether
   a brick is fit to ship: (1) it loads through its `bricks.packs` entry point,

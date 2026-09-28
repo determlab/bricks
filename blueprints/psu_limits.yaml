@@ -1,0 +1,40 @@
+name: psu_limits
+description: "Check a power supply's measured output against its limits. Takes the measured values as inputs (no hardware); the run's verdict is derived from the three measure steps."
+inputs:
+  vout: "float"
+  iout: "float"
+  ripple_pp: "float"
+steps:
+  - name: vout
+    brick: measure
+    params:
+      name: "vout"
+      value: "${vout}"
+      unit: "V"
+      min: 4.9
+      max: 5.1
+    save_as: vout_row
+
+  - name: iout
+    brick: measure
+    params:
+      name: "iout"
+      value: "${iout}"
+      unit: "A"
+      min: 0
+      max: 1.0
+    save_as: iout_row
+
+  - name: ripple_pp
+    brick: measure
+    params:
+      name: "ripple_pp"
+      value: "${ripple_pp}"
+      unit: "mV"
+      max: 50
+    save_as: ripple_row
+
+outputs_map:
+  vout: "${vout_row.result.value}"
+  iout: "${iout_row.result.value}"
+  ripple_pp: "${ripple_row.result.value}"
