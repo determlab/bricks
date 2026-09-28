@@ -31,11 +31,22 @@ def _measure_step(step_name: str, row: dict[str, Any]) -> StepResult:
 
 
 def test_derive_verdict_pass_with_no_measure_steps() -> None:
-    result = ExecutionResult(outputs={"x": 1}, steps=[])
+    other = StepResult(step_name="s", brick_name="divide", outputs={"result": 2.0})
+    result = ExecutionResult(outputs={"x": 1}, steps=[other])
     verdict = derive_verdict(result)
     assert verdict.status == "pass"
     assert verdict.measurements == []
     assert verdict.detail is None
+
+
+def test_derive_verdict_raises_loudly_on_an_empty_result() -> None:
+    # An empty ``steps`` means the result was never run at STANDARD verbosity
+    # (or higher) — MINIMAL discards steps outright — so there is nothing to
+    # derive a verdict from. Silently reporting "pass" would be a false
+    # pass; this must fail loudly instead.
+    result = ExecutionResult(outputs={}, steps=[])
+    with pytest.raises(ValueError, match="no steps recorded"):
+        derive_verdict(result)
 
 
 def test_derive_verdict_pass_with_a_passing_measurement() -> None:
@@ -117,7 +128,7 @@ _LIB_QA = (
 )
 
 _PSU_PASS_YAML = (
-    "name: psu_pass\n"
+    "name: psu_pass\n"  # noqa: S105
     "steps:\n"
     "  - name: vout\n"
     "    brick: measure\n"
@@ -336,3 +347,7 @@ def test_run_twice_with_different_units_gives_different_unit_and_matching_verdic
     assert doc1["unit"] != doc2["unit"]
     assert doc1["verdict"] == "pass"
     assert doc2["verdict"] == "fail"
+
+
+def test_public_api() -> None:
+    from bricks import derive_verdict  # noqa: F401

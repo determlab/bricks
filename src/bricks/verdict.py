@@ -81,7 +81,14 @@ def derive_verdict(result: ExecutionResult) -> Verdict:
     ``fail`` if any ``measure`` step's row has ``pass: false`` (the first
     such row is used for ``detail``); ``pass`` otherwise. Pure: reads only
     ``result.steps`` where ``brick_name == "measure"``.
+
+    Raises:
+        ValueError: ``result.steps`` is empty — a MINIMAL-verbosity result
+            records no steps at all, so there is nothing to derive a verdict
+            from, and silently returning "pass" would be a false pass.
     """
+    if not result.steps:
+        raise ValueError("derive_verdict needs a STANDARD-verbosity result (no steps recorded)")
     rows = _measurement_rows(result)
     failing = [row for row in rows if row.get("pass") is False]
     if failing:

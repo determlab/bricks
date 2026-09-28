@@ -322,9 +322,7 @@ def run(
     input_: list[str] = typer.Option(  # noqa: B008
         [], "--input", "-i", help="Input values as key=value."
     ),
-    unit: str = typer.Option(  # noqa: B008
-        "bench", "--unit", help="Unit under test. Carried through to the verdict, never blank."
-    ),
+    unit: str = typer.Option("bench", "--unit", help="Unit under test. Carried through to the verdict, never blank."),
     verbosity: Verbosity = typer.Option(  # noqa: B008
         Verbosity.MINIMAL, "--verbosity", "-v", help="Output detail level (minimal/standard/full)."
     ),

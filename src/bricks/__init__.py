@@ -5,6 +5,7 @@ from bricks.core.dag import DAG
 from bricks.core.dag_builder import DAGBuilder
 from bricks.core.dsl import Node, branch, flow, for_each, step
 from bricks.core.engine import DAGExecutionEngine
+from bricks.verdict import Verdict, derive_verdict
 
 __version__ = "0.5.0-dev"
 
@@ -13,9 +14,11 @@ __all__ = [
     "DAGBuilder",
     "DAGExecutionEngine",
     "Node",
+    "Verdict",
     "__version__",
     "branch",
     "build_default_registry",
+    "derive_verdict",
     "flow",
     "for_each",
     "run_blueprint",
