@@ -102,6 +102,7 @@ From Python:
   names the step and the brick:
   `Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0`
   (the example above with `inputs={'crm_json': '[]'}`).
+- `bricks.run_for_unit(path_or_yaml, inputs={...}, unit="SN-1")` — run for a unit and return a `RunOutcome` (`.verdict.status` is `pass`, `fail` or `error`; `.model_dump_json()` for JSON); never raises on a failing run. It does not validate first, like `bricks run`.
 - `bricks.build_default_registry()` — every installed brick (stdlib plus any pack).
 - The catalog as data, one dict per brick (name, description, parameters,
   output_keys, destructive, idempotent):
