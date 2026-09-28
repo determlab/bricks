@@ -573,10 +573,13 @@ def run(
         outcome = run_for_unit(bp_def, inputs or None, unit=unit, registry=registry, verbosity=verbosity)
     verdict = outcome.verdict
     exec_result = outcome.result
-    exc = outcome.error
+    # Not `exc`: mypy treats that name as still bound (then deleted) by an
+    # earlier `except ... as exc:` in this same function, and flags any
+    # later plain assignment to it as "reading a deleted variable" (bricks#62).
+    run_error = outcome.error
 
     if json_output:
-        if isinstance(exc, GuardFailedError):
+        if isinstance(run_error, GuardFailedError):
             # A guard failure is a verdict, not a JSON error: `ok: true` (the
             # run did what it should).
             _emit_json(
@@ -592,10 +595,12 @@ def run(
             raise typer.Exit(code=1)
         if exec_result is None:
             # Any other BrickError keeps the `ok: false` shape plus "unit" and "verdict".
-            if isinstance(exc, BrickExecutionError):
-                doc = _json_error(type(exc).__name__, str(exc), step=exc.step_name, brick=exc.brick_name)
+            if isinstance(run_error, BrickExecutionError):
+                doc = _json_error(
+                    type(run_error).__name__, str(run_error), step=run_error.step_name, brick=run_error.brick_name
+                )
             else:
-                doc = _json_error(type(exc).__name__, str(exc))
+                doc = _json_error(type(run_error).__name__, str(run_error))
             _emit_json({**doc, "unit": unit, "verdict": verdict.status})
             raise typer.Exit(code=1)
         _emit_json(
@@ -612,11 +617,11 @@ def run(
             raise typer.Exit(code=1)
         return
 
-    if isinstance(exc, GuardFailedError):
+    if isinstance(run_error, GuardFailedError):
         typer.echo(f"Verdict: FAIL (unit {unit}): {verdict.detail}")
         raise typer.Exit(code=1)
     if exec_result is None:
-        typer.echo(f"Execution error: {exc}", err=True)
+        typer.echo(f"Execution error: {run_error}", err=True)
         typer.echo(f"Verdict: ERROR (unit {unit}): {verdict.detail}", err=True)
         raise typer.Exit(code=1)
 
