@@ -27,6 +27,12 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Added
+- **`bricks.run_for_unit(source, inputs=None, *, unit="bench", registry=None)`
+  and `bricks.RunOutcome` (#59).** One public call that runs a blueprint for a
+  unit and returns its verdict (`verdict`, `result`, `unit`); a guard stop is
+  `fail`, any other `BrickError` or an unreadable blueprint file is `error`, and
+  it never raises on a failing run. `bricks run` now goes through it. New module
+  `src/bricks/outcome.py`.
 - **`blueprints/psu_limits.yaml`: the first test blueprint.** Three `measure`
   steps (`vout`, `iout`, `ripple_pp`) over input values, no hardware; a
   passing and a failing unit are shown in AGENTS.md. (#50)
