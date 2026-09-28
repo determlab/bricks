@@ -325,12 +325,13 @@ def check_meta(name: str, callable_: Callable[..., Any], meta: BrickMeta) -> lis
     capability is the source, since ``BrickMeta`` itself cannot distinguish
     "no I/O" from "I/O the author forgot to declare".
 
-    ``idempotent`` is not required to be explicit: no stdlib brick declares
-    it explicitly today (all default to the decorator's own
-    ``idempotent=True``, correct for every one of them except the four G1
-    clock/random bricks — a separate, already-tracked gap), so requiring it
-    here would fail DoD 2 against the unmodified stdlib pack for a reason
-    unrelated to the brick actually being checked.
+    ``idempotent`` is not required to be explicit: most stdlib bricks still
+    rely on the decorator's own ``idempotent=True`` default, correct for all
+    of them except the four G1 clock/random bricks, which now declare
+    ``idempotent=False`` explicitly (#58) — but nothing forces every *other*
+    brick to say so too, so requiring it here would fail DoD 2 against the
+    unmodified stdlib pack for a reason unrelated to the brick actually being
+    checked.
     """
     problems: list[Problem] = []
     if not meta.description.strip():

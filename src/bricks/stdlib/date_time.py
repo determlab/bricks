@@ -89,7 +89,7 @@ def add_hours(iso_datetime: str, hours: int) -> dict[str, str]:
     return {"result": (dt + timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S")}
 
 
-@brick(tags=["date", "now", "utility"], category="date_time", destructive=False)
+@brick(tags=["date", "now", "utility"], category="date_time", destructive=False, idempotent=False)
 def now_timestamp() -> dict[str, str]:
     """Return the current UTC datetime as ISO 8601. Returns {result: timestamp}.
 
@@ -167,7 +167,7 @@ def date_range(start: str, end: str, step_days: int = 1) -> dict[str, list[str]]
     return {"result": dates}
 
 
-@brick(tags=["date", "calculation"], category="date", destructive=False)
+@brick(tags=["date", "calculation"], category="date", destructive=False, idempotent=False)
 def days_until(target_date: str) -> dict[str, int]:
     """Calculate the number of days from today until a target date. Returns {result: int}.
 

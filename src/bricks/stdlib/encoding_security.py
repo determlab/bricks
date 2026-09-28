@@ -130,7 +130,7 @@ def escape_special_chars(text: str, chars: list[str]) -> dict[str, str]:
     return {"result": result}
 
 
-@brick(tags=["security", "uuid", "identity"], category="encoding_security", destructive=False)
+@brick(tags=["security", "uuid", "identity"], category="encoding_security", destructive=False, idempotent=False)
 def generate_uuid() -> dict[str, str]:
     """Generate a random UUID v4. Returns {result: uuid_string}.
 
@@ -140,7 +140,7 @@ def generate_uuid() -> dict[str, str]:
     return {"result": str(uuid.uuid4())}
 
 
-@brick(tags=["security", "random", "token"], category="encoding_security", destructive=False)
+@brick(tags=["security", "random", "token"], category="encoding_security", destructive=False, idempotent=False)
 def random_string(
     length: int,
     charset: Literal["alphanumeric", "hex", "alpha", "digits"] = "alphanumeric",
