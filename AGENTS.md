@@ -39,6 +39,7 @@ Outputs:
   active_count: 2
   total_active_revenue: 7300
   avg_active_revenue: 3650.0
+Verdict: PASS (unit bench)
 ```
 
 Exit 0. The numbers never change between runs. The CLI loads every installed brick
@@ -81,16 +82,30 @@ same exit code as without it. Warnings, and anything a brick prints, go to
 stderr. The other commands print
 text only.
 
+`bricks run` also reports a pass/fail verdict and takes `--unit ID` (default
+`bench`, never blank), so the same blueprint runs for the next unit without
+editing anything: `bricks run <bp> --unit SN-2`. The verdict is derived, never
+set by hand — `fail` if any `measure` step returned `pass: false` or a guard
+stopped the run, `error` if any other brick error ended it, `pass` otherwise.
+Exit 0 on pass, 1 on fail or error — the JSON's `verdict` key says which. In
+text mode the last line is `Verdict: PASS (unit bench)` or, on a failing
+measurement, `Verdict: FAIL (unit SN-2): vout 4.7 V not in [4.9, 5.1]`.
+
 ```bash
 bricks run blueprints/crm_pipeline.yaml -i crm_json='[]' --json
 ```
 
 ```
-{"ok": false, "error": {"type": "BrickExecutionError", "message": "Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0", "step": "avg_revenue", "brick": "divide"}}
+{"ok": false, "error": {"type": "BrickExecutionError", "message": "Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0", "step": "avg_revenue", "brick": "divide"}, "unit": "bench", "verdict": "error"}
 ```
 
 Exit 1. With the three-row input from First success it prints
-`{"ok": true, "blueprint": "crm_pipeline", "outputs": {"active_count": 2, "total_active_revenue": 7300, "avg_active_revenue": 3650.0}}`.
+`{"ok": true, "blueprint": "crm_pipeline", "unit": "bench", "verdict": "pass", "measurements": [], "outputs": {"active_count": 2, "total_active_revenue": 7300, "avg_active_revenue": 3650.0}}`.
+`measurements` is one row per `measure` step that ran (`{"step", "name", "value",
+"unit", "limits", "pass"}`), empty when the blueprint has none. A guard that
+stops the run is `{"ok": true, "verdict": "fail", "measurements": [], "outputs": {}, ...}`
+— the run did what it should; a `BrickError` other than a guard keeps the
+`"ok": false` shape above and adds `"unit"` and `"verdict": "error"`.
 An output value that is not a JSON type (a date, a set, `NaN`) is written as its
 `str()`; a tuple becomes a list. `bricks check blueprints/crm_pipeline.yaml --json`
 prints `{"ok": true, "file": "blueprints/crm_pipeline.yaml", "errors": []}`; when

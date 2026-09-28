@@ -102,6 +102,7 @@ bricks run blueprints/crm_pipeline.yaml -i crm_json='[{"status": "active", "mont
 #   active_count: 2
 #   total_active_revenue: 7300
 #   avg_active_revenue: 3650.0
+# Verdict: PASS (unit bench)
 
 bricks check blueprints/crm_pipeline.yaml                     # validate without executing
 bricks list                                                   # list registered bricks

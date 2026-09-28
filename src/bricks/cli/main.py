@@ -24,6 +24,7 @@ from bricks.core.exceptions import (
     BrickError,
     BrickExecutionError,
     ConfigError,
+    GuardFailedError,
     YamlLoadError,
 )
 from bricks.core.loader import BlueprintLoader
@@ -32,6 +33,7 @@ from bricks.core.registry import BrickRegistry
 from bricks.core.schema import brick_schema
 from bricks.core.validation import BlueprintValidator
 from bricks.errors import BricksConfigError
+from bricks.verdict import derive_verdict, verdict_for_error, verdict_for_guard_failure
 
 app = typer.Typer(
     name="bricks",
@@ -320,15 +322,24 @@ def run(
     input_: list[str] = typer.Option(  # noqa: B008
         [], "--input", "-i", help="Input values as key=value."
     ),
+    unit: str = typer.Option("bench", "--unit", help="Unit under test. Carried through to the verdict, never blank."),
     verbosity: Verbosity = typer.Option(  # noqa: B008
         Verbosity.MINIMAL, "--verbosity", "-v", help="Output detail level (minimal/standard/full)."
     ),
     json_output: bool = typer.Option(False, "--json", help=_JSON_HELP + " Ignores --verbosity."),
 ) -> None:
-    """Execute a blueprint.
+    """Execute a blueprint and report a pass/fail verdict.
 
-    With --json: {"ok": true, "blueprint", "outputs"}, or on failure
-    {"ok": false, "error": {"type", "message", "step"?, "brick"?}} and exit 1.
+    The verdict is derived, never set by hand: ``fail`` if any ``measure``
+    step returned ``pass: false`` or a guard stopped the run, ``error`` if
+    any other brick error ended it, ``pass`` otherwise. Exit 0 on pass, 1 on
+    fail or error.
+
+    With --json: {"ok": true, "blueprint", "unit", "verdict", "measurements",
+    "outputs"}. A guard failure is {"ok": true, "verdict": "fail", ...} — the
+    run did what it should. Any other failure keeps today's shape,
+    {"ok": false, "error": {"type", "message", "step"?, "brick"?}}, and adds
+    "unit" and "verdict".
     """
     path = Path(sequence)
     if not path.exists():
@@ -371,25 +382,68 @@ def run(
     engine = BlueprintEngine(registry=registry)
 
     if json_output:
-        # Without --json, a BrickError other than BrickExecutionError (an unknown
-        # brick, say) ends in a traceback; with it, it is a JSON error. Exit 1 both ways.
+        # The verdict reads each `measure` step's output, so this always runs
+        # at STANDARD regardless of --verbosity (which --json already ignores
+        # for output content) — the engine itself is unchanged.
+        # A guard failure is reported as a verdict, not a JSON error: it is
+        # `ok: true` (the run did what it should). Any other BrickError keeps
+        # today's `ok: false` shape and gains "unit" and "verdict".
         # What a brick prints goes to stderr, so stdout carries the JSON alone.
         try:
             with contextlib.redirect_stdout(sys.stderr):
-                json_result = engine.run(bp_def, inputs=inputs or None, verbosity=verbosity)
+                json_result = engine.run(bp_def, inputs=inputs or None, verbosity=Verbosity.STANDARD)
+        except GuardFailedError as exc:
+            verdict = verdict_for_guard_failure(exc)
+            _emit_json(
+                {
+                    "ok": True,
+                    "blueprint": bp_def.name,
+                    "unit": unit,
+                    "verdict": verdict.status,
+                    "measurements": verdict.measurements,
+                    "outputs": {},
+                }
+            )
+            raise typer.Exit(code=1) from exc
         except BrickExecutionError as exc:
-            _emit_json(_json_error(type(exc).__name__, str(exc), step=exc.step_name, brick=exc.brick_name))
+            verdict = verdict_for_error(exc)
+            doc = _json_error(type(exc).__name__, str(exc), step=exc.step_name, brick=exc.brick_name)
+            _emit_json({**doc, "unit": unit, "verdict": verdict.status})
             raise typer.Exit(code=1) from exc
         except BrickError as exc:
-            _emit_json(_json_error(type(exc).__name__, str(exc)))
+            verdict = verdict_for_error(exc)
+            doc = _json_error(type(exc).__name__, str(exc))
+            _emit_json({**doc, "unit": unit, "verdict": verdict.status})
             raise typer.Exit(code=1) from exc
-        _emit_json({"ok": True, "blueprint": bp_def.name, "outputs": json_result.outputs})
+        verdict = derive_verdict(json_result)
+        _emit_json(
+            {
+                "ok": True,
+                "blueprint": bp_def.name,
+                "unit": unit,
+                "verdict": verdict.status,
+                "measurements": verdict.measurements,
+                "outputs": json_result.outputs,
+            }
+        )
+        if verdict.status != "pass":
+            raise typer.Exit(code=1)
         return
 
+    # Same reasoning as above: the verdict needs step output, so run at least
+    # at STANDARD; --verbosity still controls what gets printed below.
+    run_verbosity = Verbosity.STANDARD if verbosity == Verbosity.MINIMAL else verbosity
+
     try:
-        exec_result = engine.run(bp_def, inputs=inputs or None, verbosity=verbosity)
-    except BrickExecutionError as exc:
+        exec_result = engine.run(bp_def, inputs=inputs or None, verbosity=run_verbosity)
+    except GuardFailedError as exc:
+        verdict = verdict_for_guard_failure(exc)
+        typer.echo(f"Verdict: FAIL (unit {unit}): {verdict.detail}")
+        raise typer.Exit(code=1) from exc
+    except BrickError as exc:
         typer.echo(f"Execution error: {exc}", err=True)
+        verdict = verdict_for_error(exc)
+        typer.echo(f"Verdict: ERROR (unit {unit}): {verdict.detail}", err=True)
         raise typer.Exit(code=1) from exc
 
     typer.echo(f"Blueprint {bp_def.name!r} completed.")
@@ -412,6 +466,13 @@ def run(
 
     if verbosity == Verbosity.FULL:
         typer.echo(f"Total: {exec_result.total_duration_ms:.1f}ms")
+
+    verdict = derive_verdict(exec_result)
+    if verdict.status == "pass":
+        typer.echo(f"Verdict: PASS (unit {unit})")
+    else:
+        typer.echo(f"Verdict: FAIL (unit {unit}): {verdict.detail}")
+        raise typer.Exit(code=1)
 
 
 @app.command(name="dry-run")
