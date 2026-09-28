@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import contextlib
+import importlib
+import importlib.util
 import json
 import math
 import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import typer
@@ -16,6 +19,7 @@ from pydantic import ValidationError
 
 from bricks.api import build_default_registry
 from bricks.cli.check_env import check_env as _check_env_fn
+from bricks.core.brick_check import CheckTarget, Problem, run_checks
 from bricks.core.config import BricksConfig, ConfigLoader
 from bricks.core.discovery import BrickDiscovery
 from bricks.core.engine import BlueprintEngine
@@ -184,9 +188,14 @@ ai:
 def new_brick(
     name: str = typer.Argument(..., help="Name of the brick (snake_case)."),
 ) -> None:
-    """Scaffold a new Brick module."""
+    """Scaffold a new Brick: a plain function decorated with @brick, in a pack (D5, D7).
+
+    Writes ``bricks_lib/<name>.py`` with a small working brick — no base
+    class, matching how every stdlib brick is written. Check it with
+    ``bricks check-brick <path>:<name> --json`` (printed below) and edit from
+    there; the scaffold itself already passes every check.
+    """
     snake_name = name.lower().replace("-", "_").replace(" ", "_")
-    class_name = "".join(word.capitalize() for word in snake_name.split("_"))
 
     output_path = Path.cwd() / "bricks_lib" / f"{snake_name}.py"
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -195,41 +204,40 @@ def new_brick(
 
 from __future__ import annotations
 
-from bricks.core import BrickMeta, BrickModel, BaseBrick
+from bricks.core.brick import brick
 
 
-class {class_name}(BaseBrick):
-    """{class_name} brick."""
+@brick(
+    tags=[],
+    category="general",
+    destructive=False,
+    idempotent=True,
+    description="Echo value unchanged. Returns {{result: value}}.",
+)
+def {snake_name}(value: str) -> dict[str, str]:
+    """Echo value unchanged — replace this with real logic.
 
-    class Meta:
-        """Brick metadata."""
+    Args:
+        value: Input value.
 
-        name = "{snake_name}"
-        tags: list[str] = []
-        destructive: bool = False
-        idempotent: bool = True
-        description = ""
-
-    class Input(BrickModel):
-        """Input schema."""
-
-    class Output(BrickModel):
-        """Output schema."""
-
-    def execute(self, inputs: BrickModel, metadata: BrickMeta) -> dict[str, object]:
-        """Execute the brick.
-
-        Args:
-            inputs: Validated input data.
-            metadata: Brick metadata.
-
-        Returns:
-            Output dict matching Output schema.
-        """
-        raise NotImplementedError(f"{{{class_name}}} is not yet implemented")
+    Returns:
+        dict with key ``result``.
+    """
+    return {{"result": value}}
 '''
     output_path.write_text(content)
+    try:
+        rel_path = output_path.relative_to(Path.cwd()).as_posix()
+    except ValueError:
+        rel_path = str(output_path)
     typer.echo(f"Created {output_path}")
+    typer.echo(f"Check it: bricks check-brick {rel_path}:{snake_name} --json")
+    typer.echo(
+        "To ship it as an installed pack instead of a local bricks_lib/ file: "
+        "give it a register(registry) function (see src/bricks/stdlib/__init__.py) "
+        'and add to pyproject.toml: [project.entry-points."bricks.packs"] '
+        f'{snake_name}_pack = "bricks_lib"'
+    )
 
 
 @new_app.command("blueprint")
@@ -314,6 +322,183 @@ def check(
         _emit_json({"ok": True, "file": file, "errors": []})
     else:
         typer.echo(f"valid: {path}")
+
+
+class CheckBrickLoadError(Exception):
+    """The check-brick target itself could not be loaded — exit code 2."""
+
+
+def _load_check_brick_module(module_ref: str) -> ModuleType:
+    """Import *module_ref*: a dotted module path, or a ``.py`` file path.
+
+    A path is loaded directly from disk (the same technique
+    :class:`~bricks.core.discovery.BrickDiscovery` uses for a local file) so
+    it needs no package or ``sys.path`` entry — the scaffold ``bricks new
+    brick`` writes into ``bricks_lib/`` can be checked in place.
+
+    Args:
+        module_ref: Dotted import path (``bricks.stdlib``) or a path to a
+            ``.py`` file (``bricks_lib/demo.py``).
+
+    Returns:
+        The imported module.
+
+    Raises:
+        CheckBrickLoadError: The module cannot be found or imported.
+    """
+    looks_like_path = module_ref.endswith(".py") or "/" in module_ref or "\\" in module_ref
+    if looks_like_path:
+        path = Path(module_ref)
+        if not path.exists():
+            raise CheckBrickLoadError(f"No such file: {path}")
+        spec = importlib.util.spec_from_file_location(f"_check_brick_{path.stem}", path)
+        if spec is None or spec.loader is None:
+            raise CheckBrickLoadError(f"Cannot load spec for {path}")
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except Exception as exc:
+            raise CheckBrickLoadError(f"Error importing {path}: {exc}") from exc
+        return module
+    try:
+        return importlib.import_module(module_ref)
+    except Exception as exc:
+        raise CheckBrickLoadError(f"Error importing {module_ref!r}: {exc}") from exc
+
+
+def _resolve_check_targets(target: str) -> list[CheckTarget]:
+    """Resolve *target* (a pack module, or ``module:func``) to bricks to check.
+
+    Args:
+        target: ``"module:func"`` checks the one brick ``func`` in ``module``
+            (a dotted path or a ``.py`` file). Without a ``:``, *target* is a
+            pack module (dotted path, e.g. ``bricks.stdlib``) with a
+            ``register(registry)`` function — every brick it registers is
+            checked (D7: that function is how a pack arrives).
+
+    Returns:
+        One :class:`~bricks.core.brick_check.CheckTarget` per brick to check.
+        A ``module:func`` target that doesn't name a declared brick still
+        returns one entry, carrying the check-1 problem — that is a fixable
+        exit-1 finding, not a load failure.
+
+    Raises:
+        CheckBrickLoadError: *target* itself could not be loaded at all.
+    """
+    if ":" in target:
+        module_ref, _sep, func_name = target.rpartition(":")
+        module = _load_check_brick_module(module_ref)
+        obj = getattr(module, func_name, None)
+        if obj is None:
+            return [
+                CheckTarget(
+                    name=func_name,
+                    callable_=None,
+                    meta=None,
+                    problems=[
+                        Problem(
+                            brick=func_name,
+                            check="brick.exists",
+                            fix=f"Define `{func_name}` in {module_ref} — no such attribute.",
+                        )
+                    ],
+                )
+            ]
+        if not callable(obj) or not hasattr(obj, "__brick_meta__"):
+            return [
+                CheckTarget(
+                    name=func_name,
+                    callable_=None,
+                    meta=None,
+                    problems=[
+                        Problem(
+                            brick=func_name,
+                            check="brick.declared",
+                            fix=f"Decorate `{func_name}` with @brick(...) from bricks.core.brick "
+                            "so it registers as a brick.",
+                        )
+                    ],
+                )
+            ]
+        return [CheckTarget(name=func_name, callable_=obj, meta=obj.__brick_meta__, problems=[])]
+
+    module = _load_check_brick_module(target)
+    register_fn = getattr(module, "register", None)
+    if register_fn is None or not callable(register_fn):
+        raise CheckBrickLoadError(f"{target!r} has no register(registry) function — it is not a brick pack.")
+    local = BrickRegistry()
+    try:
+        register_fn(local)
+    except Exception as exc:
+        raise CheckBrickLoadError(f"{target!r}.register() raised {type(exc).__name__}: {exc}") from exc
+    targets = [
+        CheckTarget(name=name, callable_=local.get(name)[0], meta=meta, problems=[])
+        for name, meta in local.list_all()
+    ]
+    if not targets:
+        raise CheckBrickLoadError(f"{target!r} registered no bricks.")
+    return targets
+
+
+@app.command(name="check-brick")
+def check_brick(
+    target: str = typer.Argument(
+        ...,
+        help="A pack module (dotted, e.g. 'bricks.stdlib') to check every brick in it, or "
+        "'module:func' — a dotted module or .py file path, plus one brick's attribute name.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help=_JSON_HELP),
+) -> None:
+    """Check whether a brick — or every brick in a pack — is fit to ship (ops#117 ruling 4).
+
+    Per brick: (1) it loads through its ``bricks.packs`` entry point, or the
+    given ``module:func``, and is declared with ``@brick``; (2) its name
+    does not clash with an installed brick; (3) its Meta has a non-empty
+    description, ``destructive`` set explicitly, and no undeclared I/O (I3:
+    a brick that touches the outside world must be a declared capability —
+    Bricks owns no I/O); (4) it runs on a synthesized example input and
+    returns the Mission 048 contract's output key(s).
+
+    Exit 0: ok. Exit 1: one or more problems, each with a ``fix``. Exit 2:
+    *target* itself could not be loaded (a bad pack or an import error). With
+    --json: {"ok", "target", "problems": [{"brick", "check", "fix"}]}; an
+    exit-2 failure adds "error" (a message) and "problems" stays empty.
+    """
+    try:
+        targets = _resolve_check_targets(target)
+    except CheckBrickLoadError as exc:
+        if json_output:
+            _emit_json({"ok": False, "target": target, "problems": [], "error": str(exc)})
+        else:
+            typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    try:
+        reference_registry = build_default_registry()
+    except BricksConfigError as exc:
+        if json_output:
+            _emit_json({"ok": False, "target": target, "problems": [], "error": str(exc)})
+        else:
+            typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    problems: list[dict[str, str]] = []
+    for one_target in targets:
+        problems.extend(p.as_dict() for p in run_checks(one_target, reference_registry))
+
+    ok = not problems
+    if json_output:
+        _emit_json({"ok": ok, "target": target, "problems": problems})
+    elif ok:
+        count = len(targets)
+        typer.echo(f"ok: {target} ({count} brick{'s' if count != 1 else ''} checked)")
+    else:
+        typer.echo(f"{len(problems)} problem(s) in {target}:")
+        for p in problems:
+            typer.echo(f"  - [{p['brick']}] {p['check']}: {p['fix']}")
+
+    if not ok:
+        raise typer.Exit(code=1)
 
 
 @app.command()

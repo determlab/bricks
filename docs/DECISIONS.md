@@ -33,6 +33,16 @@ below rather than papered over.
 | D13 | **No string in a blueprint is ever executed as code** — a blueprint is fixed data. Anything that decides control flow at run time, a guard or a branch condition, is a brick called like any other step. The engine contains no `eval`, no `exec`, and no expression interpreter. Supersedes the `type: guard` `condition:` expression form (never used in any shipped blueprint). Verification: a recursive `grep` of `src/bricks/core/` for `eval(` and `exec(` returns nothing — run in CI as the `D13: no eval/exec in the engine core` step of the `lint` job, which also fails if that directory goes missing. The exact command is in that step and in `docs/agents/context.md` | RFC-002 (accepted 2026-09-03), `src/bricks/core/engine.py` `_execute_guard_step`, `.github/workflows/ci.yml` |
 | D15 | **The composer's catalog is the common set, not the registry** — `CatalogConfig.common_set` ships populated with the 14 bricks `block-set.md` keeps visible, so `TieredCatalog.list_bricks()` lists at most 20 by default. The registry stays complete behind tier-2 search (`lookup_brick`); nothing is removed. The rule is that no composer receives the full registry; that half is not wired yet (G10, `tool-set.md` R4 pending). Verification: `tests/core/test_catalog.py::TestCatalogConfig::test_default_config_list_bricks_is_exactly_the_common_set` (default config lists exactly the common set, ≤ 20) and the #31 selector baseline, `tests/core/test_selector_measurement.py` against `tests/baselines/selector_measurement.md` | ops `projects/shal/specs/tool-set.md` R3 (CTO, 2026-09-09), `projects/bricks/specs/block-set.md`, #31 measurement, #35, `src/bricks/core/config.py` `DEFAULT_COMMON_SET` |
 
+## Invariants
+
+Properties every brick must hold, independent of which decision above
+established the mechanism. Numbered separately from the D-series because
+these bind the *content* of a brick, not the engine's architecture.
+
+| # | Invariant | Source |
+|---|---|---|
+| I3 | **A brick that touches the outside world must be a declared capability; Bricks owns no I/O** — the stdlib ships with zero file, network or process calls (AGENTS.md, "Side effects"), and any brick that does perform I/O must say so rather than let a caller find out at run time | ops#117 CTO ruling 4 (2026-09-29); made visible by `bricks check-brick` (#51), which flags a brick whose source shows a recognisable I/O call but is not declared `destructive=True` — `src/bricks/core/brick_check.py` `check_meta`/`_looks_like_io` |
+
 ## Gaps against locked decisions
 
 Each of these is a decision that is **true as intent and false in the code today**. Per
@@ -51,6 +61,7 @@ pre-scoped. None is a new decision; they are all debts against decisions above.
 | G8 | — | The two public entry points disagree on safety. `run_blueprint()` validates (`api.py:86`); the CLI's `bricks run` constructs the engine directly and does not (`cli/main.py:242`). Only `check` and `dry-run` validate. Same operation, different guarantees, depending on how you call it. |
 | G9 | — | Roughly 15% of the engine is unreachable scaffolding left over from the bricks/bricks-ai split: `boot/` is imported by nothing, `core/filtering_selector.py` is imported by nothing, and `core/validator_dsl.py` is reachable only through `core/__init__.py`'s re-export. |
 | G10 | D15 | **R4 pending.** The default is set, but no composer is handed it. Nothing in `src/bricks` constructs a `TieredCatalog`, so `CatalogConfig.common_set` reaches no caller by itself. In `bricks_ai`, the composer (`composer.py:302`) defaults to `AllBricksSelector`, and the MCP resource `bricks://catalog` serves `list_public()`: both hand a model the full registry. Wiring them to the common set is `tool-set.md` ruling R4, not R3 (#35). |
+| G11 | I3 | `bricks check-brick` (#51) is opt-in tooling a brick author runs by hand; nothing in `BrickRegistry.register` or the engine's execute path calls it, so an undeclared-I/O brick still loads and runs today — I3 has a checker, not a gate. Separately, `idempotent` is not required to be explicit even by that checker (see `check_meta`'s docstring): no stdlib brick sets it explicitly, and two of the four G1 clock/random bricks live in `encoding_security.py`, which #51 left untouched — so `generate_uuid` and `random_string` still report the decorator's default `idempotent=True` despite G1 already establishing that they are not. |
 
 ## Open decisions
 
