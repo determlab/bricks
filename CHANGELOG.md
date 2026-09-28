@@ -27,6 +27,10 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Added
+- **`bricks.run_for_unit()` and `RunOutcome` (#59).** One public call that runs
+  a blueprint for a unit and returns its verdict (`verdict`, `result`, `unit`),
+  never raising on a failing unit. `bricks run` now goes through the same helper
+  (`bricks.outcome`), so there is one path; CLI output is unchanged.
 - **`blueprints/psu_limits.yaml`: the first test blueprint.** Three `measure`
   steps (`vout`, `iout`, `ripple_pp`) over input values, no hardware; a
   passing and a failing unit are shown in AGENTS.md. (#50)

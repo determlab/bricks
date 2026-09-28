@@ -22,7 +22,6 @@ from bricks.cli.check_env import check_env as _check_env_fn
 from bricks.core.brick_check import CheckTarget, Problem, run_checks
 from bricks.core.config import BricksConfig, ConfigLoader
 from bricks.core.discovery import BrickDiscovery
-from bricks.core.engine import BlueprintEngine
 from bricks.core.exceptions import (
     BlueprintValidationError,
     BrickError,
@@ -37,7 +36,7 @@ from bricks.core.registry import BrickRegistry
 from bricks.core.schema import brick_schema
 from bricks.core.validation import BlueprintValidator
 from bricks.errors import BricksConfigError
-from bricks.verdict import derive_verdict, verdict_for_error, verdict_for_guard_failure
+from bricks.outcome import execute_for_unit
 
 app = typer.Typer(
     name="bricks",
@@ -563,21 +562,23 @@ def run(
             inputs[k] = v
 
     registry, _ = _setup_registry(on_error=_emit_config_error if json_output else None)
-    engine = BlueprintEngine(registry=registry)
+
+    # One path for the verdict (#59): execute_for_unit, the same helper
+    # run_for_unit uses. The CLI keeps its own load and does not validate (G8).
+    # The verdict reads each `measure` step's output, so this always runs at
+    # least at STANDARD; --verbosity still controls what is printed below.
+    run_verbosity = Verbosity.STANDARD if json_output or verbosity == Verbosity.MINIMAL else verbosity
 
     if json_output:
-        # The verdict reads each `measure` step's output, so this always runs
-        # at STANDARD regardless of --verbosity (which --json already ignores
-        # for output content) — the engine itself is unchanged.
         # A guard failure is reported as a verdict, not a JSON error: it is
         # `ok: true` (the run did what it should). Any other BrickError keeps
         # today's `ok: false` shape and gains "unit" and "verdict".
         # What a brick prints goes to stderr, so stdout carries the JSON alone.
-        try:
-            with contextlib.redirect_stdout(sys.stderr):
-                json_result = engine.run(bp_def, inputs=inputs or None, verbosity=Verbosity.STANDARD)
-        except GuardFailedError as exc:
-            verdict = verdict_for_guard_failure(exc)
+        with contextlib.redirect_stdout(sys.stderr):
+            outcome = execute_for_unit(bp_def, registry, inputs, unit, run_verbosity, validate=False)
+        verdict = outcome.verdict
+        exc = outcome.error
+        if isinstance(exc, GuardFailedError):
             _emit_json(
                 {
                     "ok": True,
@@ -589,17 +590,17 @@ def run(
                 }
             )
             raise typer.Exit(code=1) from exc
-        except BrickExecutionError as exc:
-            verdict = verdict_for_error(exc)
+        if isinstance(exc, BrickExecutionError):
             doc = _json_error(type(exc).__name__, str(exc), step=exc.step_name, brick=exc.brick_name)
             _emit_json({**doc, "unit": unit, "verdict": verdict.status})
             raise typer.Exit(code=1) from exc
-        except BrickError as exc:
-            verdict = verdict_for_error(exc)
+        if exc is not None:
             doc = _json_error(type(exc).__name__, str(exc))
             _emit_json({**doc, "unit": unit, "verdict": verdict.status})
             raise typer.Exit(code=1) from exc
-        verdict = derive_verdict(json_result)
+        json_result = outcome.result
+        if json_result is None:  # unreachable: no error means a result
+            raise typer.Exit(code=1)
         _emit_json(
             {
                 "ok": True,
@@ -614,19 +615,15 @@ def run(
             raise typer.Exit(code=1)
         return
 
-    # Same reasoning as above: the verdict needs step output, so run at least
-    # at STANDARD; --verbosity still controls what gets printed below.
-    run_verbosity = Verbosity.STANDARD if verbosity == Verbosity.MINIMAL else verbosity
-
-    try:
-        exec_result = engine.run(bp_def, inputs=inputs or None, verbosity=run_verbosity)
-    except GuardFailedError as exc:
-        verdict = verdict_for_guard_failure(exc)
+    outcome = execute_for_unit(bp_def, registry, inputs, unit, run_verbosity, validate=False)
+    verdict = outcome.verdict
+    exc = outcome.error
+    if isinstance(exc, GuardFailedError):
         typer.echo(f"Verdict: FAIL (unit {unit}): {verdict.detail}")
         raise typer.Exit(code=1) from exc
-    except BrickError as exc:
+    exec_result = outcome.result
+    if exc is not None or exec_result is None:
         typer.echo(f"Execution error: {exc}", err=True)
-        verdict = verdict_for_error(exc)
         typer.echo(f"Verdict: ERROR (unit {unit}): {verdict.detail}", err=True)
         raise typer.Exit(code=1) from exc
 
@@ -651,7 +648,6 @@ def run(
     if verbosity == Verbosity.FULL:
         typer.echo(f"Total: {exec_result.total_duration_ms:.1f}ms")
 
-    verdict = derive_verdict(exec_result)
     if verdict.status == "pass":
         typer.echo(f"Verdict: PASS (unit {unit})")
     else:
