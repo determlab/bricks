@@ -55,6 +55,43 @@ python -c "import json, bricks; rows = [dict(name='Acme', status='active', month
 
 prints `{'active_count': 2, 'total_active_revenue': 7300, 'avg_active_revenue': 3650.0}`.
 
+## A test blueprint
+
+`blueprints/psu_limits.yaml` is what a test engineer runs first: three `measure`
+steps (`vout` in `4.9..5.1` V, `iout` in `0..1.0` A, `ripple_pp` max 50 mV) against
+values you give as inputs — no hardware, no SHAL. A passing unit:
+
+```bash
+bricks run blueprints/psu_limits.yaml --unit SN-1 -i vout=5.0 -i iout=0.4 -i ripple_pp=12
+```
+
+```
+Blueprint 'psu_limits' completed.
+Outputs:
+  vout: 5.0
+  iout: 0.4
+  ripple_pp: 12
+Verdict: PASS (unit SN-1)
+```
+
+Exit 0. A failing unit (`vout` outside its limits):
+
+```bash
+bricks run blueprints/psu_limits.yaml --unit SN-2 -i vout=4.7 -i iout=0.4 -i ripple_pp=12
+```
+
+```
+Blueprint 'psu_limits' completed.
+Outputs:
+  vout: 4.7
+  iout: 0.4
+  ripple_pp: 12
+Verdict: FAIL (unit SN-2): vout 4.7 V not in [4.9, 5.1]
+```
+
+Exit 1. `--json` on either command adds `"verdict"`, `"unit"` and one row per
+`measure` step in `"measurements"`, each with its `"pass"`.
+
 ## How an agent calls it
 
 From Python:
