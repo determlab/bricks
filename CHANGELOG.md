@@ -30,6 +30,30 @@ policy above holds from 0.2.0 onward.
 - **`blueprints/psu_limits.yaml`: the first test blueprint.** Three `measure`
   steps (`vout`, `iout`, `ripple_pp`) over input values, no hardware; a
   passing and a failing unit are shown in AGENTS.md. (#50)
+- **`bricks check-brick`: the ADK check for a brick, plus a function-brick scaffold.**
+  `bricks check-brick <pack|module:func> [--json]` tells a brick author whether
+  a brick is fit to ship: (1) it loads through its `bricks.packs` entry point,
+  or the given `module:func` (a dotted module or a `.py` file path, loaded by
+  path like local `auto_discover`, plus one brick's attribute name), and is
+  declared with `@brick`; (2) its name does not clash with an installed brick;
+  (3) its Meta has a non-empty description, `destructive` set explicitly, and
+  no undeclared I/O (new invariant I3, `docs/DECISIONS.md`: "a brick that
+  touches the outside world must be a declared capability; Bricks owns no
+  I/O"); (4) it runs on a synthesized example input and returns the Mission
+  048 contract's output key(s) — the same check `tests/stdlib/test_contracts.py`
+  already ran for stdlib bricks, generalised into
+  `src/bricks/core/brick_check.py` (`synthesize_inputs`, shared by both).
+  Without a `:`, the target is a pack module (e.g. `bricks.stdlib`) and every
+  brick it registers is checked. Exit 0 ok, 1 one or more problems (each with
+  a `fix` string), 2 the target itself could not be loaded. `--json` prints
+  `{"ok", "target", "problems": [{"brick", "check", "fix"}]}`.
+
+  `bricks new brick` now scaffolds what D5/D7 say a brick is — a plain
+  `@brick`-decorated function in `bricks_lib/`, not a `BaseBrick` subclass —
+  and the scaffold itself passes `check-brick` unedited. ***Upgrading:*** a
+  script that parsed the old class-based scaffold (`bricks_lib/<name>.py`
+  defining a `BaseBrick` subclass) must update to the new function shape; the
+  file path and command are unchanged. (#51, ops#117 CTO ruling 4)
 
 - **`bricks run`: a pass/fail verdict and `--unit`.** `run` takes `--unit ID`
   (default `bench`, never blank), and reports a verdict derived from the
