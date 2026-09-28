@@ -27,6 +27,10 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Added
+- **`blueprints/psu_limits.yaml`: the first test blueprint.** Three `measure`
+  steps (`vout`, `iout`, `ripple_pp`) over input values, no hardware; a
+  passing and a failing unit are shown in AGENTS.md. (#50)
+
 - **`bricks run`: a pass/fail verdict and `--unit`.** `run` takes `--unit ID`
   (default `bench`, never blank), and reports a verdict derived from the
   run — never set by hand (ops `record.md` §2): `fail` if any `measure` step
