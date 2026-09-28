@@ -19,6 +19,7 @@ from bricks.stdlib import (
     encoding_security,
     list_operations,
     math_numeric,
+    measurement,
     string_processing,
     validation,
 )
@@ -127,6 +128,8 @@ _OVERRIDE_INPUTS: dict[str, dict[str, Any]] = {
     "matches_pattern": {"text": "hello123", "pattern": r"[a-z]+\d+"},
     "has_required_keys": {"data": {"a": 1}, "required_keys": ["a"]},
     "compare_values": {"a": 1, "b": 2, "operator": "lt"},
+    # measurement
+    "measure": {"name": "vout", "value": 4.98, "unit": "V", "min": 4.9, "max": 5.1},
 }
 
 # Bricks to skip when their required OS packages are absent on the test host.
@@ -155,6 +158,7 @@ _STDLIB_MODULES = [
     encoding_security,
     list_operations,
     math_numeric,
+    measurement,
     string_processing,
     validation,
 ]

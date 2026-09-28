@@ -21,6 +21,7 @@ from bricks.stdlib import (
     encoding_security,
     list_operations,
     math_numeric,
+    measurement,
     string_processing,
     validation,
 )
@@ -50,6 +51,7 @@ def register(registry: BrickRegistry) -> None:
         validation,
         list_operations,
         encoding_security,
+        measurement,
     ]
 
     for module in modules:

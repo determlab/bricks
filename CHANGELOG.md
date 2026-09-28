@@ -27,6 +27,17 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Added
+- **`measure` brick: one measurement row with a pass verdict.** New stdlib
+  brick `measure(name, value, unit, min=None, max=None)` returns
+  `{result: {name, value, unit, limits, pass}}`. `limits` holds only the
+  bounds given (`{}` if neither), bounds are inclusive, and a non-finite
+  `value` (NaN, inf) is `pass: false`. It never raises on a failing value —
+  the run continues and a verdict is derived from all rows (a later ticket);
+  it raises `ValueError` naming both numbers only when `min > max`. Pure: no
+  I/O, clock or random. Lives in the new `measurement` category
+  (`src/bricks/stdlib/measurement.py`); the stdlib now ships 102 bricks, 104
+  registered with the two DSL builtins. (#48, ops `record.md` R3)
+
 - **CI runs the README Quick Start as printed.** A new `quickstart` job in
   `.github/workflows/ci.yml` (ubuntu and windows) builds the wheel from the
   commit, installs it in a clean venv, and runs the README's Quick Start blocks,

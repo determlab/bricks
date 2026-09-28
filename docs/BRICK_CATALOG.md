@@ -2,7 +2,7 @@
 
 Generated: 2026-06-12
 
-This catalog documents all 101 available stdlib bricks. Each brick returns a dictionary with a `result` key.
+This catalog documents all 102 available stdlib bricks. Each brick returns a dictionary with a `result` key.
 
 ## Data Transformation
 
@@ -1695,6 +1695,44 @@ Round a number to the specified number of decimal places. Returns {result: round
 **Output:**
 
 - `result` (dict[str, float]): dict with key ``result`` containing the rounded float.
+
+
+## Measurement
+
+### measure
+
+Build one measurement row with a pass verdict. Returns {result: {name, value, unit, limits, pass}}.
+
+    Args:
+        name: Measurement name.
+        value: Measured value.
+        unit: Unit the value is expressed in (e.g. ``"V"``, ``"mm"``).
+        min: Lower bound, inclusive (default None — no lower bound).
+        max: Upper bound, inclusive (default None — no upper bound).
+
+    Returns:
+        dict with key ``result`` containing one measurement row: ``name``,
+        ``value``, ``unit``, ``limits`` (only the bounds given; ``{}`` if
+        neither was given), and ``pass`` (False if ``value`` is not finite,
+        or falls outside a given bound; True otherwise).
+
+    Raises:
+        ValueError: If both bounds are given and min is above max.
+
+
+**Tags:** `measurement`, `pass-fail`, `range`
+
+**Input:**
+
+- `name` (str): Measurement name.
+- `value` (float): Measured value.
+- `unit` (str): Unit the value is expressed in (e.g. ``"V"``, ``"mm"``).
+- `min` (float | None) (default: None): Lower bound, inclusive (default None — no lower bound).
+- `max` (float | None) (default: None): Upper bound, inclusive (default None — no upper bound).
+
+**Output:**
+
+- `result` (dict[str, Any]): dict with key ``result`` containing one measurement row: ``name``, ``value``, ``unit``, ``limits``, ``pass``.
 
 
 ## String
