@@ -239,12 +239,15 @@ outputs_map:
         """Exceeding max recursion depth raises BrickExecutionError."""
         # A blueprint that calls itself
         self_path = tmp_path / "self_ref.yaml"
-        self_path.write_text(f"""
+        self_path.write_text(
+            f"""
 name: self_ref
 steps:
   - name: recurse
     blueprint: "{self_path.as_posix()}"
-""", encoding="utf-8")
+""",
+            encoding="utf-8",
+        )
 
         reg = _make_registry()
         engine = BlueprintEngine(registry=reg)
