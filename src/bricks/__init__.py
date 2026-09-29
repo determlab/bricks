@@ -8,7 +8,7 @@ from bricks.core.engine import DAGExecutionEngine
 from bricks.outcome import RunOutcome, run_for_unit
 from bricks.verdict import Verdict, derive_verdict
 
-__version__ = "0.5.0-dev"
+__version__ = "0.5.0"
 
 __all__ = [
     "DAG",
