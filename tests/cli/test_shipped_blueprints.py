@@ -50,9 +50,7 @@ def _bricks(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-@pytest.mark.parametrize(
-    "path", sorted(_BLUEPRINTS.glob("*.yaml")), ids=lambda p: p.name
-)
+@pytest.mark.parametrize("path", sorted(_BLUEPRINTS.glob("*.yaml")), ids=lambda p: p.name)
 def test_shipped_blueprint_checks_and_runs(path: Path) -> None:
     assert path.name in _INPUTS, (
         f"blueprints/{path.name} has no input in _INPUTS in "
