@@ -98,5 +98,5 @@ def test_text_output_unchanged(tmp_path: Path) -> None:
 
 
 def test_help_shows_json() -> None:
-    result = runner.invoke(app, ["dry-run", "--help"])
+    result = runner.invoke(app, ["dry-run", "--help"], env={"NO_COLOR": "1", "TERM": "dumb"})
     assert "--json" in result.stdout
