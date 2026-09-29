@@ -1,0 +1,58 @@
+name: Release
+
+# Publishes bricks-engine to PyPI when a GitHub Release is published, by
+# trusted publishing (OIDC): no API token is stored in this repo.
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Read the package version
+        id: version
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Release tag matches the package version
+        run: |
+          if [ "${{ github.event.release.tag_name }}" != "v${{ steps.version.outputs.version }}" ]; then
+            echo "Release tag '${{ github.event.release.tag_name }}' is not 'v${{ steps.version.outputs.version }}'" >&2
+            exit 1
+          fi
+      - name: Fail if this version is already on PyPI
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/bricks-engine/${{ steps.version.outputs.version }}/json")
+          if [ "$status" = "200" ]; then
+            echo "bricks-engine ${{ steps.version.outputs.version }} is already on PyPI" >&2
+            exit 1
+          fi
+          if [ "$status" != "404" ]; then
+            echo "Unexpected HTTP $status from PyPI" >&2
+            exit 1
+          fi
+      - run: pip install build
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
