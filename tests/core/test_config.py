@@ -82,7 +82,7 @@ ai:
 class TestLoadFile:
     def test_load_file_reads_yaml(self, tmp_path: Path) -> None:
         config_file = tmp_path / "bricks.config.yaml"
-        config_file.write_text("registry:\n  auto_discover: true\n  paths:\n    - 'bricks/'\n")
+        config_file.write_text("registry:\n  auto_discover: true\n  paths:\n    - 'bricks/'\n", encoding="utf-8")
         loader = ConfigLoader()
         config = loader.load_file(config_file)
         assert config.registry.auto_discover is True, f"Expected True, got {config.registry.auto_discover!r}"
@@ -95,7 +95,7 @@ class TestLoadFile:
 
     def test_load_searches_for_default_filename(self, tmp_path: Path) -> None:
         config_file = tmp_path / "bricks.config.yaml"
-        config_file.write_text("ai:\n  max_tokens: 1000\n")
+        config_file.write_text("ai:\n  max_tokens: 1000\n", encoding="utf-8")
         loader = ConfigLoader()
         config = loader.load(directory=tmp_path)
         assert config.ai.max_tokens == 1000, f"Expected 1000, got {config.ai.max_tokens!r}"

@@ -76,7 +76,7 @@ class TestBlueprintLoaderFromString:
 class TestBlueprintLoaderFromFile:
     def test_load_from_yaml_file(self, tmp_path: Path) -> None:
         yaml_file = tmp_path / "test.yaml"
-        yaml_file.write_text("name: file_test\nsteps:\n  - name: s1\n    brick: x\n")
+        yaml_file.write_text("name: file_test\nsteps:\n  - name: s1\n    brick: x\n", encoding="utf-8")
         loader = BlueprintLoader()
         bp = loader.load_file(yaml_file)
         assert bp.name == "file_test", f"Expected 'file_test', got {bp.name!r}"
@@ -88,14 +88,14 @@ class TestBlueprintLoaderFromFile:
 
     def test_empty_file_raises(self, tmp_path: Path) -> None:
         yaml_file = tmp_path / "empty.yaml"
-        yaml_file.write_text("")
+        yaml_file.write_text("", encoding="utf-8")
         loader = BlueprintLoader()
         with pytest.raises(YamlLoadError):
             loader.load_file(yaml_file)
 
     def test_load_file_accepts_str_path(self, tmp_path: Path) -> None:
         yaml_file = tmp_path / "str_path.yaml"
-        yaml_file.write_text("name: str_test\nsteps:\n  - name: s1\n    brick: x\n")
+        yaml_file.write_text("name: str_test\nsteps:\n  - name: s1\n    brick: x\n", encoding="utf-8")
         loader = BlueprintLoader()
         bp = loader.load_file(str(yaml_file))
         assert bp.name == "str_test"
