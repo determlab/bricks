@@ -98,9 +98,12 @@ def test_config_path_adds_on_top_of_stdlib(tmp_path: Path) -> None:
         "\n"
         "@brick(description='A local brick that reuses a stdlib name')\n"
         "def divide(a: float, b: float) -> dict[str, float]:\n"
-        "    return {'result': -1.0}\n"
+        "    return {'result': -1.0}\n",
+        encoding="utf-8",
     )
-    (work / "bricks.config.yaml").write_text("registry:\n  auto_discover: true\n  paths:\n    - 'bricks_lib/'\n")
+    (work / "bricks.config.yaml").write_text(
+        "registry:\n  auto_discover: true\n  paths:\n    - 'bricks_lib/'\n", encoding="utf-8"
+    )
 
     listed = _bricks(work, "list")
     assert listed.returncode == 0, f"stdout={listed.stdout}\nstderr={listed.stderr}"
@@ -125,9 +128,12 @@ def test_shadowed_local_brick_warns(tmp_path: Path) -> None:
         "\n"
         "@brick()\n"
         "def my_local_brick(a: int) -> dict[str, int]:\n"
-        "    return {'result': a}\n"
+        "    return {'result': a}\n",
+        encoding="utf-8",
     )
-    (work / "bricks.config.yaml").write_text("registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n")
+    (work / "bricks.config.yaml").write_text(
+        "registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n", encoding="utf-8"
+    )
 
     result = _bricks(work, "run", "blueprints/crm_pipeline.yaml", "-i", f"crm_json={_CRM_JSON}")
     assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"

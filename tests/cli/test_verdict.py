@@ -195,12 +195,14 @@ def _one_json(result: subprocess.CompletedProcess[str]) -> Any:
 def work(tmp_path: Path) -> Path:
     """A directory with the ``measure``/guard/error fixture blueprints and a local lib."""
     (tmp_path / "lib").mkdir()
-    (tmp_path / "lib" / "qa.py").write_text(_LIB_QA)
-    (tmp_path / "bricks.config.yaml").write_text("registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n")
-    (tmp_path / "psu_pass.yaml").write_text(_PSU_PASS_YAML)
-    (tmp_path / "psu_limits.yaml").write_text(_PSU_LIMITS_YAML)
-    (tmp_path / "guarded.yaml").write_text(_GUARDED_YAML)
-    (tmp_path / "erroring.yaml").write_text(_ERRORING_YAML)
+    (tmp_path / "lib" / "qa.py").write_text(_LIB_QA, encoding="utf-8")
+    (tmp_path / "bricks.config.yaml").write_text(
+        "registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n", encoding="utf-8"
+    )
+    (tmp_path / "psu_pass.yaml").write_text(_PSU_PASS_YAML, encoding="utf-8")
+    (tmp_path / "psu_limits.yaml").write_text(_PSU_LIMITS_YAML, encoding="utf-8")
+    (tmp_path / "guarded.yaml").write_text(_GUARDED_YAML, encoding="utf-8")
+    (tmp_path / "erroring.yaml").write_text(_ERRORING_YAML, encoding="utf-8")
     return tmp_path
 
 

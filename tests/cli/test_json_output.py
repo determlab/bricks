@@ -67,7 +67,7 @@ def work(tmp_path: Path) -> Path:
     d = tmp_path / "clean"
     (d / "blueprints").mkdir(parents=True)
     shutil.copy(_REPO_BLUEPRINT, d / "blueprints" / "crm_pipeline.yaml")
-    (d / "bad.yaml").write_text(_BAD_BLUEPRINT)
+    (d / "bad.yaml").write_text(_BAD_BLUEPRINT, encoding="utf-8")
     return d
 
 
@@ -129,7 +129,7 @@ def test_run_json_other_failures(work: Path, args: list[str], error_type: str, r
 
 
 def test_run_json_yaml_error(work: Path) -> None:
-    (work / "broken.yaml").write_text("name: [unclosed\n")
+    (work / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
     result = _bricks(work, "run", "broken.yaml", "--json")
     assert result.returncode == 1
     doc = _one_json(result)
@@ -146,9 +146,12 @@ def test_run_json_non_serialisable_outputs_fall_back_to_str(work: Path) -> None:
         "@brick()\n"
         "def odd_values(x: int) -> dict[str, object]:\n"
         "    return {'day': datetime.date(2026, 1, 2), 'nan': float('nan'), 'pair': (1, 'a'),\n"
-        "            'nested': {'when': datetime.date(2026, 1, 3), 'n': 1}}\n"
+        "            'nested': {'when': datetime.date(2026, 1, 3), 'n': 1}}\n",
+        encoding="utf-8",
     )
-    (work / "bricks.config.yaml").write_text("registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n")
+    (work / "bricks.config.yaml").write_text(
+        "registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n", encoding="utf-8"
+    )
     (work / "odd.yaml").write_text(
         "name: odd\n"
         "steps:\n"
@@ -160,7 +163,8 @@ def test_run_json_non_serialisable_outputs_fall_back_to_str(work: Path) -> None:
         '  day: "${r.day}"\n'
         '  nan: "${r.nan}"\n'
         '  pair: "${r.pair}"\n'
-        '  nested: "${r.nested}"\n'
+        '  nested: "${r.nested}"\n',
+        encoding="utf-8",
     )
     result = _bricks(work, "run", "odd.yaml", "--json")
     assert result.returncode == 0, result.stderr
@@ -205,9 +209,12 @@ def test_run_json_keeps_clash_warning_on_stderr(work: Path) -> None:
         "from bricks.core import brick\n\n"
         "@brick()\n"
         "def divide(a: float, b: float) -> dict[str, float]:\n"
-        "    return {'result': -1.0}\n"
+        "    return {'result': -1.0}\n",
+        encoding="utf-8",
     )
-    (work / "bricks.config.yaml").write_text("registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n")
+    (work / "bricks.config.yaml").write_text(
+        "registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n", encoding="utf-8"
+    )
     result = _bricks(work, "run", "blueprints/crm_pipeline.yaml", "-i", f"crm_json={_CRM_JSON}", "--json")
     assert result.returncode == 0, result.stderr
     assert _one_json(result)["ok"] is True
@@ -240,7 +247,7 @@ def test_check_json_missing_file(work: Path) -> None:
 
 
 def test_check_json_yaml_error(work: Path) -> None:
-    (work / "broken.yaml").write_text("name: [unclosed\n")
+    (work / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
     result = _bricks(work, "check", "broken.yaml", "--json")
     assert result.returncode == 1
     doc = _one_json(result)
@@ -342,9 +349,12 @@ def test_json_stdout_is_json_alone_when_a_brick_prints(work: Path) -> None:
         "@brick()\n"
         "def noisy(x: int) -> dict[str, int]:\n"
         "    print('noisy: running')\n"
-        "    return {'result': x}\n"
+        "    return {'result': x}\n",
+        encoding="utf-8",
     )
-    (work / "bricks.config.yaml").write_text("registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n")
+    (work / "bricks.config.yaml").write_text(
+        "registry:\n  auto_discover: true\n  paths:\n    - 'lib/'\n", encoding="utf-8"
+    )
     (work / "noisy.yaml").write_text(
         "name: noisy\n"
         "steps:\n"
@@ -353,7 +363,8 @@ def test_json_stdout_is_json_alone_when_a_brick_prints(work: Path) -> None:
         "    params: {x: 7}\n"
         "    save_as: r\n"
         "outputs_map:\n"
-        '  result: "${r.result}"\n'
+        '  result: "${r.result}"\n',
+        encoding="utf-8",
     )
 
     ran = _bricks(work, "run", "noisy.yaml", "--json")
@@ -391,7 +402,7 @@ def test_json_stdout_is_json_alone_when_a_brick_prints(work: Path) -> None:
     ],
 )
 def test_json_when_config_is_broken(work: Path, config: str) -> None:
-    (work / "bricks.config.yaml").write_text(config)
+    (work / "bricks.config.yaml").write_text(config, encoding="utf-8")
     for args in (["run", "blueprints/crm_pipeline.yaml"], ["list"]):
         result = _bricks(work, *args, "--json")
         assert result.returncode == 1

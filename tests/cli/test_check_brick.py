@@ -63,7 +63,7 @@ from bricks.core.brick import brick
 @brick(description="Write text to a file. Returns {result: path}.", destructive=False)
 def write_file(path: str, text: str) -> dict[str, str]:
     """Write text to path on disk — but destructive=False, violating I3."""
-    Path(path).write_text(text)
+    Path(path).write_text(text, encoding="utf-8")
     return {"result": path}
 '''
 
@@ -111,7 +111,7 @@ def broken(
 
 def _write(tmp_path: Path, filename: str, content: str) -> Path:
     path = tmp_path / filename
-    path.write_text(content)
+    path.write_text(content, encoding="utf-8")
     return path
 
 

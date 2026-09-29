@@ -44,7 +44,7 @@ def _make_registry() -> BrickRegistry:
 def _write_child_bp(tmp_path: Path, content: str, name: str = "child.yaml") -> Path:
     """Write a child blueprint YAML to a temp file and return its path."""
     p = tmp_path / name
-    p.write_text(content)
+    p.write_text(content, encoding="utf-8")
     return p
 
 
@@ -244,7 +244,7 @@ name: self_ref
 steps:
   - name: recurse
     blueprint: "{self_path.as_posix()}"
-""")
+""", encoding="utf-8")
 
         reg = _make_registry()
         engine = BlueprintEngine(registry=reg)

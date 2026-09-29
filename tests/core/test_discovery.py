@@ -108,7 +108,8 @@ class TestDiscoverPath:
                 @brick(tags=["math"], description="Adds two numbers")
                 def add_numbers(a: int, b: int) -> int:
                     return a + b
-            """).strip()
+            """).strip(),
+            encoding="utf-8",
         )
 
         reg = BrickRegistry()
@@ -136,7 +137,8 @@ class TestDiscoverPackage:
                 @brick(description="Brick A")
                 def brick_alpha(x: int) -> int:
                     return x
-            """).strip()
+            """).strip(),
+            encoding="utf-8",
         )
         (tmp_path / "bricks_b.py").write_text(
             textwrap.dedent("""
@@ -145,7 +147,8 @@ class TestDiscoverPackage:
                 @brick(description="Brick B")
                 def brick_beta(x: int) -> int:
                     return x
-            """).strip()
+            """).strip(),
+            encoding="utf-8",
         )
         (tmp_path / "_private.py").write_text(
             textwrap.dedent("""
@@ -154,7 +157,8 @@ class TestDiscoverPackage:
                 @brick(description="Private - should be skipped")
                 def private_brick(x: int) -> int:
                     return x
-            """).strip()
+            """).strip(),
+            encoding="utf-8",
         )
 
         reg = BrickRegistry()
@@ -169,7 +173,7 @@ class TestDiscoverPackage:
     def test_raises_for_non_directory(self, tmp_path: Path) -> None:
         """NotADirectoryError raised when path is a file, not a directory."""
         py_file = tmp_path / "file.py"
-        py_file.write_text("x = 1")
+        py_file.write_text("x = 1", encoding="utf-8")
         reg = BrickRegistry()
         disc = BrickDiscovery(registry=reg)
         with pytest.raises(NotADirectoryError):
