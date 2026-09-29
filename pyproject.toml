@@ -1,6 +1,6 @@
 [project]
-name = "bricks"
-version = "0.5.0-dev"
+name = "bricks-engine"
+version = "0.5.0"
 description = "Deterministic execution engine: typed Python building blocks composed into auditable pipelines. No LLM required."
 requires-python = ">=3.10"
 license = "MIT"
