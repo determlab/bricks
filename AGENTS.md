@@ -113,12 +113,22 @@ From Python:
 
   prints `104 __branch__` (102 stdlib bricks plus 2 DSL builtins).
 
-CLI (`bricks --help` lists all): `run`, `check`, `dry-run`, `list`, `init`, `new`,
-`store seed`, `store list`, `check-env`. `run`, `check` and `list` take `--json`:
+CLI (`bricks --help` lists all): `run`, `check`, `check-brick`, `dry-run`, `list`,
+`init`, `new brick`, `new blueprint`, `new sequence`, `store seed`, `store list`,
+`check-env`. `run`, `check`, `check-brick` and `list` take `--json`:
 stdout is then exactly one JSON document, for success and for failure, with the
 same exit code as without it. Warnings, and anything a brick prints, go to
 stderr. The other commands print
 text only.
+
+Build a new brick: `bricks new brick <name>` writes `bricks_lib/<name>.py`, then
+`bricks check-brick bricks_lib/<name>.py:<name> --json` checks it (or
+`bricks check-brick <pack.module> --json` for every brick in a pack). Exit 0: ok.
+Exit 1: one or more problems. Exit 2: the target could not be loaded (a missing
+file or an import error). The JSON is
+`{"ok": false, "target": "...", "problems": [{"brick": "...", "check": "...", "fix": "..."}]}`;
+read each `problems[].fix`, edit the brick and run the check again until it exits 0.
+Exit 2 adds an `"error"` message and leaves `problems` empty.
 
 `bricks run` also reports a pass/fail verdict and takes `--unit ID` (default
 `bench`, never blank), so the same blueprint runs for the next unit without
@@ -155,7 +165,7 @@ prints `{"ok": true, "bricks": [...]}`, one entry per brick with `name`,
 With `auto_discover: true`, the `paths` in `bricks.config.yaml` add local
 bricks on top of the packs. A local brick with a pack brick's name is not used, and
 the CLI prints a warning naming it to stderr. `compose`, `demo`, `serve` and
-`playground` need the separate `bricks-ai` package and an LLM.
+`playground` (`playground run`) need the separate `bricks-ai` package and an LLM.
 `bricks serve` (the MCP server) is one of them: without it, it exits 1 with
 `Error: MCP features require the 'mcp' package.` There is no MCP server in this
 package.
