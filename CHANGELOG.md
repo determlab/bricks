@@ -27,6 +27,10 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Added
+- **`bricks new brick` / `new blueprint` never overwrite a file (#72).** Both exit 1
+  on an existing file, `new brick` rejects invalid or keyword names and names of
+  installed bricks, and the blueprint scaffold is now a `measure` step that passes
+  `bricks check` and `bricks run` unedited.
 - **`bricks.run_for_unit(source, inputs=None, *, unit="bench", registry=None)`
   and `bricks.RunOutcome` (#59).** One public call that runs a blueprint for a
   unit and returns its verdict (`verdict`, `result`, `unit`); a guard stop is

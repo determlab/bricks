@@ -6,6 +6,7 @@ import contextlib
 import importlib
 import importlib.util
 import json
+import keyword
 import math
 import os
 import sys
@@ -195,7 +196,23 @@ def new_brick(
     """
     snake_name = name.lower().replace("-", "_").replace(" ", "_")
 
+    if not snake_name.isidentifier() or keyword.iskeyword(snake_name):
+        typer.echo(
+            f"Error: '{snake_name}' is not a valid brick name: use letters, digits and "
+            "underscores, not starting with a digit, and not a Python keyword.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
     output_path = Path.cwd() / "bricks_lib" / f"{snake_name}.py"
+    if output_path.exists():
+        typer.echo(f"Error: {output_path} already exists; pick another name.", err=True)
+        raise typer.Exit(code=1)
+    if build_default_registry().has(snake_name):
+        typer.echo(
+            f"Error: {snake_name} already names an installed brick (see `bricks list`); pick another name.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     content = f'''"""Brick: {snake_name}."""
@@ -223,7 +240,7 @@ def {snake_name}(value: str) -> dict[str, str]:
     """
     return {{"result": value}}
 '''
-    output_path.write_text(content)
+    output_path.write_text(content, encoding="utf-8")
     try:
         rel_path = output_path.relative_to(Path.cwd()).as_posix()
     except ValueError:
@@ -249,20 +266,30 @@ def new_blueprint(name: str = typer.Argument(..., help="Name of the blueprint.")
     bp_dir.mkdir(parents=True, exist_ok=True)
 
     output_path = bp_dir / f"{snake_name}.yaml"
+    if output_path.exists():
+        typer.echo(f"Error: {output_path} already exists; pick another name.", err=True)
+        raise typer.Exit(code=1)
     content = f"""name: {snake_name}
-description: ""
+description: "Check one measured value against its limits. Edit the input, unit and limits."
 inputs:
-  # input_name: "type"
+  value: "float"
 steps:
-  - name: step_1
-    brick: my_brick
-    params: {{}}
-    save_as: step_1_result
+  - name: check_value
+    brick: measure
+    params:
+      name: "value"
+      value: "${{value}}"
+      unit: "V"
+      min: 0
+      max: 10
+    save_as: value_row
 outputs_map:
-  result: "${{step_1_result}}"
+  value: "${{value_row.result.value}}"
 """
-    output_path.write_text(content)
+    output_path.write_text(content, encoding="utf-8")
     typer.echo(f"Created {output_path}")
+    typer.echo(f"Check it: bricks check {output_path} --json")
+    typer.echo(f"Run it: bricks run {output_path} -i value=5 --unit SN-1 --json")
 
 
 @new_app.command("sequence")

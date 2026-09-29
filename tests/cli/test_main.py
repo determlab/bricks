@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -139,6 +140,62 @@ class TestNewBrickCommand:
         assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
         assert "bricks check-brick" in result.output, "Expected a check-brick hint in output"
         assert "checkable.py:checkable" in result.output, "Expected the module:func target in output"
+
+
+class TestNewNeverOverwrites:
+    """`new brick` / `new blueprint` refuse bad names and existing files (#72)."""
+
+    def test_brick_existing_file_unchanged(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "bricks_lib").mkdir()
+        target = tmp_path / "bricks_lib" / "mine.py"
+        target.write_text("# edited\n")
+        result = runner.invoke(app, ["new", "brick", "mine"])
+        assert result.exit_code == 1
+        assert "mine.py" in result.output
+        assert "another name" in result.output
+        assert target.read_text() == "# edited\n"
+
+    @pytest.mark.parametrize("name", ["class", "1st"])
+    def test_brick_invalid_name(self, name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(app, ["new", "brick", name])
+        assert result.exit_code == 1
+        assert not (tmp_path / "bricks_lib" / f"{name}.py").exists()
+
+    def test_brick_installed_name(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(app, ["new", "brick", "measure"])
+        assert result.exit_code == 1
+        assert "bricks list" in result.output
+        assert not (tmp_path / "bricks_lib" / "measure.py").exists()
+
+    def test_blueprint_existing_file_unchanged(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "blueprints").mkdir()
+        target = tmp_path / "blueprints" / "t.yaml"
+        target.write_text("# edited\n")
+        result = runner.invoke(app, ["new", "blueprint", "t"])
+        assert result.exit_code == 1
+        assert "t.yaml" in result.output
+        assert target.read_text() == "# edited\n"
+
+    def test_blueprint_scaffold_checks_and_runs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        assert runner.invoke(app, ["new", "blueprint", "t"]).exit_code == 0
+        checked = runner.invoke(app, ["check", "blueprints/t.yaml", "--json"])
+        assert checked.exit_code == 0, checked.output
+        assert json.loads(checked.stdout)["ok"] is True
+        ran = runner.invoke(app, ["run", "blueprints/t.yaml", "-i", "value=5", "--unit", "SN-1", "--json"])
+        assert ran.exit_code == 0, ran.output
+        assert json.loads(ran.stdout)["verdict"] == "pass"
+
+    def test_brick_scaffold_passes_check_brick(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        assert runner.invoke(app, ["new", "brick", "my_probe"]).exit_code == 0
+        result = runner.invoke(app, ["check-brick", "bricks_lib/my_probe.py:my_probe", "--json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.stdout)["ok"] is True
 
 
 class TestNewBlueprintCommand:
