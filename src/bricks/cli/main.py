@@ -541,6 +541,14 @@ def run(
             typer.echo(f"Error loading YAML: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
+    if not unit.strip():
+        blank_msg = "--unit must not be blank (leave it out for 'bench')"
+        if json_output:
+            _emit_json(_json_error("InvalidInputError", blank_msg))
+        else:
+            typer.echo(f"Error: {blank_msg}", err=True)
+        raise typer.Exit(code=1)
+
     inputs: dict[str, object] = {}
     for item in input_:
         if "=" not in item:

@@ -92,6 +92,9 @@ def run_for_unit(
     Returns:
         A :class:`RunOutcome`.
     """
+    if unit is not None and not unit.strip():
+        verdict = Verdict(status="error", detail="unit must not be blank (leave it out for 'bench')")
+        return RunOutcome(verdict=verdict, unit=unit)
     run_verbosity = Verbosity.STANDARD if verbosity == Verbosity.MINIMAL else verbosity
     try:
         if isinstance(source, BlueprintDefinition):
