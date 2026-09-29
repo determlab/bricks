@@ -26,6 +26,12 @@ policy above holds from 0.2.0 onward.
 
 ## [Unreleased]
 
+### Fixed
+- **A blank unit id is refused (#82).** `bricks run --unit " "` exits 1 with
+  `--unit must not be blank (leave it out for 'bench')`, and
+  `run_for_unit(..., unit=" ")` returns an `error` outcome instead of writing a
+  blank unit into the verdict.
+
 ### Added
 - **`bricks new brick` / `new blueprint` never overwrite a file (#72).** Both exit 1
   on an existing file, `new brick` rejects invalid or keyword names and names of
