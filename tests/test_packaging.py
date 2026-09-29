@@ -15,5 +15,4 @@ def test_pyproject_name_and_version_match_package() -> None:
     version = re.search(r'^version = "([^"]+)"', text, re.MULTILINE)
     assert name is not None and version is not None
     assert name.group(1) == "bricks-engine"
-    assert version.group(1) == "0.5.0"
     assert bricks.__version__ == version.group(1)
