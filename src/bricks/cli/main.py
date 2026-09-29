@@ -240,7 +240,7 @@ def {snake_name}(value: str) -> dict[str, str]:
     """
     return {{"result": value}}
 '''
-    output_path.write_text(content)
+    output_path.write_text(content, encoding="utf-8")
     try:
         rel_path = output_path.relative_to(Path.cwd()).as_posix()
     except ValueError:
@@ -286,7 +286,7 @@ steps:
 outputs_map:
   value: "${{value_row.result.value}}"
 """
-    output_path.write_text(content)
+    output_path.write_text(content, encoding="utf-8")
     typer.echo(f"Created {output_path}")
     typer.echo(f"Check it: bricks check {output_path} --json")
     typer.echo(f"Run it: bricks run {output_path} -i value=5 --unit SN-1 --json")
