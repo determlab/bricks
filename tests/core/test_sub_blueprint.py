@@ -44,7 +44,7 @@ def _make_registry() -> BrickRegistry:
 def _write_child_bp(tmp_path: Path, content: str, name: str = "child.yaml") -> Path:
     """Write a child blueprint YAML to a temp file and return its path."""
     p = tmp_path / name
-    p.write_text(content)
+    p.write_text(content, encoding="utf-8")
     return p
 
 
@@ -239,12 +239,15 @@ outputs_map:
         """Exceeding max recursion depth raises BrickExecutionError."""
         # A blueprint that calls itself
         self_path = tmp_path / "self_ref.yaml"
-        self_path.write_text(f"""
+        self_path.write_text(
+            f"""
 name: self_ref
 steps:
   - name: recurse
     blueprint: "{self_path.as_posix()}"
-""")
+""",
+            encoding="utf-8",
+        )
 
         reg = _make_registry()
         engine = BlueprintEngine(registry=reg)
