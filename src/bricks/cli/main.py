@@ -656,27 +656,47 @@ def run(
 @app.command(name="dry-run")
 def dry_run(
     sequence: str = typer.Argument(..., help="Path to blueprint YAML file."),
+    json_output: bool = typer.Option(False, "--json", help=_JSON_HELP),
 ) -> None:
-    """Validate a blueprint without executing (dry run)."""
+    """Validate a blueprint without executing (dry run).
+
+    With --json: {"ok", "file", "errors": [str, ...]}; exit 1 when not ok.
+    """
     path = Path(sequence)
+
+    def fail_json(*errors: str) -> None:
+        _emit_json({"ok": False, "file": sequence, "errors": list(errors)})
+
     if not path.exists():
-        typer.echo(f"Error: Blueprint file not found: {path}", err=True)
+        if json_output:
+            fail_json(f"File not found: {path}")
+        else:
+            typer.echo(f"Error: Blueprint file not found: {path}", err=True)
         raise typer.Exit(code=1)
 
     bp_loader = BlueprintLoader()
     try:
         bp_def = bp_loader.load_file(path)
     except YamlLoadError as exc:
-        typer.echo(f"Error loading YAML: {exc}", err=True)
+        if json_output:
+            fail_json(f"Error loading YAML: {exc}")
+        else:
+            typer.echo(f"Error loading YAML: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
-    registry, _ = _setup_registry()
+    registry, _ = _setup_registry(on_error=(lambda _type, msg: fail_json(msg)) if json_output else None)
     validator = BlueprintValidator(registry=registry)
 
     try:
         validator.validate(bp_def)
-        typer.echo(f"Blueprint {bp_def.name!r} is valid (dry-run passed).")
+        if json_output:
+            _emit_json({"ok": True, "file": sequence, "errors": []})
+        else:
+            typer.echo(f"Blueprint {bp_def.name!r} is valid (dry-run passed).")
     except BlueprintValidationError as exc:
+        if json_output:
+            fail_json(*(exc.errors or [str(exc)]))
+            raise typer.Exit(code=1) from exc
         typer.echo("Validation errors:", err=True)
         if exc.errors:
             for error in exc.errors:
