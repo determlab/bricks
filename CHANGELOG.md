@@ -27,6 +27,12 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Fixed
+- **`flow.to_yaml()` is reproducible (#90, G2).** Node ids are now a per-trace
+  creation counter instead of a `uuid4`, so compiling the same `@flow` twice
+  gives the same YAML, with steps in the order they were written. A `@flow`
+  that returns, or takes as a step input, a step created outside its body
+  raises `ValueError` ("create every step inside the @flow body") instead of
+  pointing at the wrong step.
 - **A missing input is named before the first step (#93).** `bricks run` and
   `run_for_unit` end as `error` with a `MissingInputError` naming every input the
   blueprint declares but the caller did not pass, and how to pass it; no step runs.
