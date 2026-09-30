@@ -27,6 +27,11 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Fixed
+- **`flow.to_yaml()` is reproducible (#90, G2).** Node ids are now a per-trace
+  creation counter instead of a `uuid4`, so compiling the same `@flow` twice
+  gives the same YAML, with steps in the order they were written. A `@flow`
+  that returns a step created outside its body raises `ValueError` ("create
+  every step inside the @flow body") instead of pointing at the wrong step.
 - **A blank unit id is refused (#82).** `bricks run --unit " "` exits 1 with
   `--unit must not be blank (leave it out for 'bench')`, and
   `run_for_unit(..., unit=" ")` returns an `error` outcome instead of writing a
