@@ -47,6 +47,17 @@ class VariableResolutionError(BrickError):
         super().__init__(f"Cannot resolve reference: {reference!r}")
 
 
+class MissingInputError(BrickError):
+    """Raised when a run is not given every input its blueprint declares."""
+
+    def __init__(self, names: list[str]) -> None:
+        self.names = names
+        super().__init__(
+            f"missing input(s): {', '.join(names)} — pass each with -i NAME=VALUE (bricks run) "
+            "or inputs={...} (run_for_unit)"
+        )
+
+
 class BrickExecutionError(BrickError):
     """Raised when a brick fails during execution."""
 

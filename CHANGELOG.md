@@ -27,6 +27,9 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Fixed
+- **A missing input is named before the first step (#93).** `bricks run` and
+  `run_for_unit` end as `error` with a `MissingInputError` naming every input the
+  blueprint declares but the caller did not pass, and how to pass it; no step runs.
 - **A blank unit id is refused (#82).** `bricks run --unit " "` exits 1 with
   `--unit must not be blank (leave it out for 'bench')`, and
   `run_for_unit(..., unit=" ")` returns an `error` outcome instead of writing a
