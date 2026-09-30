@@ -35,14 +35,37 @@ Example::
 from __future__ import annotations
 
 import inspect
-import uuid
-from collections.abc import Callable
+import itertools
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from bricks.core.dag import DAG
     from bricks.core.models import BlueprintDefinition
+
+#: Source of node ids. Each ``@flow`` trace installs a fresh counter (see
+#: :func:`_fresh_node_ids`) so ids, and the id-ordered tie-break in
+#: ``DAG.topological_sort``, are the same on every compile of the same flow.
+_node_ids: ContextVar[Iterator[int] | None] = ContextVar("bricks_node_ids", default=None)
+_default_node_ids: Iterator[int] = itertools.count()
+
+
+def _next_node_id() -> str:
+    """Return the next node id: zero-padded so string order is creation order."""
+    return f"{next(_node_ids.get() or _default_node_ids):08d}"
+
+
+@contextmanager
+def _fresh_node_ids() -> Iterator[None]:
+    """Number nodes from zero for the duration of one trace, then restore."""
+    token = _node_ids.set(itertools.count())
+    try:
+        yield
+    finally:
+        _node_ids.reset(token)
 
 
 @dataclass(frozen=True)
@@ -69,7 +92,7 @@ class Node:
     or by the control-flow primitives :func:`for_each` and :func:`branch`.
 
     Attributes:
-        id: Auto-generated 8-char hex unique identifier.
+        id: Zero-padded creation counter, restarted at each ``@flow`` trace.
         type: Node type — ``"brick"``, ``"for_each"``, or ``"branch"``.
         brick_name: Brick identifier (set only when ``type="brick"``).
         params: Keyword arguments passed to the brick. Values may be other
@@ -102,7 +125,7 @@ class Node:
             :class:`~bricks.dsl.dag_builder.DAGBuilder` (Mission 059).
     """
 
-    id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
+    id: str = field(default_factory=_next_node_id)
     type: str = ""
     brick_name: str = ""
     params: dict[str, Any] = field(default_factory=dict)
@@ -354,7 +377,7 @@ def for_each(
     # _ItemProxy lets the lambda subscript / attr-access the item without
     # raising at trace time — the access path is recorded and replayed
     # per iteration at runtime. See issue #69.
-    mock = _ItemProxy(root_id=uuid.uuid4().hex[:8])
+    mock = _ItemProxy(root_id=_next_node_id())
     trace_error: Exception | None = None
     try:
         do(mock)
@@ -592,11 +615,12 @@ class FlowDefinition:
         merged: dict[str, Any] = {**(inputs or {}), **kwargs}
 
         if self._fn is not None and merged:
-            _tracer.start()
-            try:
-                return_value = self._fn(**merged)
-            finally:
-                _tracer.stop()
+            with _fresh_node_ids():
+                _tracer.start()
+                try:
+                    return_value = self._fn(**merged)
+                finally:
+                    _tracer.stop()
             traced_nodes = _tracer.get_nodes()
 
             if isinstance(return_value, dict) and all(isinstance(v, Node) for v in return_value.values()):
@@ -677,11 +701,12 @@ def flow(
     # InputMapper resolves to the runtime value passed to execute().
     mock_args: dict[str, Any] = {name: InputRef(name) for name in param_names}
 
-    _tracer.start()
-    try:
-        return_value = func(**mock_args)
-    finally:
-        _tracer.stop()
+    with _fresh_node_ids():
+        _tracer.start()
+        try:
+            return_value = func(**mock_args)
+        finally:
+            _tracer.stop()
 
     traced_nodes = _tracer.get_nodes()
 
