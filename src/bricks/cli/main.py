@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import importlib.metadata
 import importlib.util
 import json
 import keyword
@@ -17,6 +18,7 @@ from typing import Any
 
 import typer
 from pydantic import ValidationError
+from typer.core import TyperGroup
 
 from bricks.api import build_default_registry
 from bricks.cli.check_env import check_env as _check_env_fn
@@ -38,11 +40,66 @@ from bricks.core.validation import BlueprintValidator
 from bricks.errors import BricksConfigError
 from bricks.outcome import run_for_unit
 
+
+class _JsonUsageGroup(TyperGroup):
+    """Root group: with ``--json`` on the command line, a usage error is JSON on stdout.
+
+    The usual error text still goes to stderr, and the exit code stays 2.
+    """
+
+    def main(self, *args: Any, **kwargs: Any) -> Any:
+        argv = args[0] if args and args[0] is not None else kwargs.get("args")
+        argv = sys.argv[1:] if argv is None else list(argv)
+        if "--json" not in argv or not kwargs.get("standalone_mode", True):
+            return super().main(*args, **kwargs)
+        kwargs["standalone_mode"] = False
+        try:
+            rv = super().main(*args, **kwargs)
+        except typer.Exit as exc:
+            sys.exit(exc.exit_code)
+        except typer.Abort:
+            typer.echo("Aborted!", err=True)
+            sys.exit(1)
+        except Exception as exc:
+            # Newer typer vendors click, so match click's exceptions by shape, not by class.
+            if not (hasattr(exc, "show") and hasattr(exc, "exit_code")):
+                raise
+            exc.show()
+            if any(c.__name__ == "UsageError" for c in type(exc).__mro__):
+                ctx = getattr(exc, "ctx", None)
+                cmd = ctx.command_path if ctx is not None else "bricks"
+                message = f"{exc.format_message()} — run `{cmd} --help`"
+                _emit_json(_json_error("UsageError", message))
+            sys.exit(exc.exit_code)
+        sys.exit(rv if isinstance(rv, int) else 0)
+
+
 app = typer.Typer(
     name="bricks",
     help="Bricks - Deterministic sequencing engine for typed Python building blocks.",
     no_args_is_help=True,
+    cls=_JsonUsageGroup,
 )
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"bricks-engine {importlib.metadata.version('bricks-engine')}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _root(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Print the installed bricks-engine version.",
+    ),
+) -> None:
+    """Bricks - Deterministic sequencing engine for typed Python building blocks."""
+
 
 new_app = typer.Typer(help="Scaffold new Bricks components.")
 app.add_typer(new_app, name="new")

@@ -119,7 +119,9 @@ CLI (`bricks --help` lists all): `run`, `check`, `check-brick`, `dry-run`, `list
 stdout is then exactly one JSON document, for success and for failure, with the
 same exit code as without it. Warnings, and anything a brick prints, go to
 stderr. The other commands print
-text only.
+text only. `bricks --version` prints `bricks-engine <version>`; with `--json`, a
+usage error (a missing argument, an unknown option) prints
+`{"ok": false, "error": {"type": "UsageError", "message": ...}}` on stdout, exit 2.
 
 Build a new brick: `bricks new brick <name>` writes `bricks_lib/<name>.py`, then
 `bricks check-brick bricks_lib/<name>.py:<name> --json` checks it (or
