@@ -33,6 +33,10 @@ policy above holds from 0.2.0 onward.
   blank unit into the verdict.
 
 ### Added
+- **Usage errors are JSON with `--json`; `bricks --version` (#94).** A missing
+  argument or unknown option with `--json` on the command line prints
+  `{"ok": false, "error": {"type": "UsageError", ...}}` on stdout (exit still 2),
+  and `bricks --version` prints `bricks-engine <version>`.
 - **`bricks new brick` / `new blueprint` never overwrite a file (#72).** Both exit 1
   on an existing file, `new brick` rejects invalid or keyword names and names of
   installed bricks, and the blueprint scaffold is now a `measure` step that passes
