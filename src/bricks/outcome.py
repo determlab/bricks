@@ -15,7 +15,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from bricks.api import build_default_registry
 from bricks.core.engine import BlueprintEngine
-from bricks.core.exceptions import BrickError, GuardFailedError
+from bricks.core.exceptions import BrickError, GuardFailedError, MissingInputError
 from bricks.core.loader import BlueprintLoader
 from bricks.core.models import BlueprintDefinition, ExecutionResult, Verbosity
 from bricks.core.registry import BrickRegistry
@@ -110,6 +110,9 @@ def run_for_unit(
                 except (OSError, UnicodeDecodeError) as exc:
                     verdict = Verdict(status="error", detail=f"Cannot read blueprint {path}: {exc}")
                     return RunOutcome(verdict=verdict, unit=unit)
+        missing = [name for name in blueprint.inputs if name not in (inputs or {})]
+        if missing:
+            raise MissingInputError(missing)
         reg = registry if registry is not None else build_default_registry()
         result = BlueprintEngine(registry=reg).run(blueprint, inputs=inputs or None, verbosity=run_verbosity)
     except BrickError as exc:
