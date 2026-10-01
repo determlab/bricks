@@ -297,7 +297,7 @@ def test_run_text_guard_failure_prints_verdict_fail_and_no_traceback(work: Path)
 
 def test_run_json_brick_error_is_ok_false_verdict_error(work: Path) -> None:
     result = _bricks(work, "run", "erroring.yaml", "--json")
-    assert result.returncode == 1
+    assert result.returncode == 2
     doc = _one_json(result)
     assert doc["ok"] is False
     assert doc["unit"] == "bench"
@@ -309,7 +309,7 @@ def test_run_json_brick_error_is_ok_false_verdict_error(work: Path) -> None:
 
 def test_run_text_brick_error_prints_verdict_error_line(work: Path) -> None:
     result = _bricks(work, "run", "erroring.yaml")
-    assert result.returncode == 1
+    assert result.returncode == 2
     assert result.stdout == ""
     lines = result.stderr.strip("\n").splitlines()
     assert lines[0] == "Execution error: Brick 'boom' failed at step 'boom_step': power supply exploded"
@@ -325,7 +325,7 @@ def test_run_text_brick_error_prints_verdict_error_line(work: Path) -> None:
         ("psu_pass.yaml", [], 0),
         ("psu_limits.yaml", ["-i", "vout_value=4.7"], 1),
         ("guarded.yaml", [], 1),
-        ("erroring.yaml", [], 1),
+        ("erroring.yaml", [], 2),
     ],
 )
 def test_exit_code_is_0_on_pass_1_otherwise(

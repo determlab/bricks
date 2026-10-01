@@ -54,7 +54,7 @@ def test_cli_names_every_missing_input() -> None:
         env=env,
         check=False,
     )
-    assert result.returncode == 1, result.stderr
+    assert result.returncode == 2, result.stderr
     doc = json.loads(result.stdout)
     assert doc["ok"] is False
     assert doc["verdict"] == "error"
