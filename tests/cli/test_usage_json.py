@@ -34,9 +34,9 @@ def test_usage_error_stdout_empty_without_json_flag(args: list[str]) -> None:
     assert result.stdout == ""
 
 
-def test_failing_json_command_keeps_exit_code_1() -> None:
+def test_failing_json_command_exits_2_on_error_verdict() -> None:
     result = runner.invoke(app, ["run", "blueprints/psu_limits.yaml", "--json"])
-    assert result.exit_code == 1
+    assert result.exit_code == 2
     assert json.loads(result.stdout)["ok"] is False
 
 

@@ -26,6 +26,10 @@ policy above holds from 0.2.0 onward.
 
 ## [Unreleased]
 
+### Changed
+- **`bricks run` exits 2 when the verdict is `error` (#101).** Exit 1 stays for a
+  failing check or guard (`fail`), 0 for `pass`.
+
 ### Fixed
 - **`flow.to_yaml()` is reproducible (#90, G2).** Node ids are now a per-trace
   creation counter instead of a `uuid4`, so compiling the same `@flow` twice

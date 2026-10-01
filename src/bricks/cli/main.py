@@ -600,7 +600,7 @@ def run(
     The verdict is derived, never set by hand: ``fail`` if any ``measure``
     step returned ``pass: false`` or a guard stopped the run, ``error`` if
     any other brick error ended it, ``pass`` otherwise. Exit 0 on pass, 1 on
-    fail or error.
+    fail (a failing check), 2 on error (the run itself broke).
 
     With --json: {"ok": true, "blueprint", "unit", "verdict", "measurements",
     "outputs"}. A guard failure is {"ok": true, "verdict": "fail", ...} — the
@@ -695,7 +695,7 @@ def run(
             else:
                 doc = _json_error(type(run_error).__name__, str(run_error))
             _emit_json({**doc, "unit": unit, "verdict": verdict.status})
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=2)
         _emit_json(
             {
                 "ok": True,
@@ -716,7 +716,7 @@ def run(
     if exec_result is None:
         typer.echo(f"Execution error: {run_error}", err=True)
         typer.echo(f"Verdict: ERROR (unit {unit}): {verdict.detail}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=2)
 
     typer.echo(f"Blueprint {bp_def.name!r} completed.")
     if exec_result.outputs:
