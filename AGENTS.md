@@ -137,7 +137,7 @@ Exit 2 adds an `"error"` message and leaves `problems` empty.
 editing anything: `bricks run <bp> --unit SN-2`. The verdict is derived, never
 set by hand — `fail` if any `measure` step returned `pass: false` or a guard
 stopped the run, `error` if any other brick error ended it, `pass` otherwise.
-Exit 0 on pass, 1 on fail or error — the JSON's `verdict` key says which. In
+Exit 0 on pass, 1 on fail, 3 on error — the JSON's `verdict` key says which. In
 text mode the last line is `Verdict: PASS (unit bench)` or, on a failing
 measurement, `Verdict: FAIL (unit SN-2): vout 4.7 V not in [4.9, 5.1]`.
 
@@ -149,7 +149,7 @@ bricks run blueprints/crm_pipeline.yaml -i crm_json='[]' --json
 {"ok": false, "error": {"type": "BrickExecutionError", "message": "Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0", "step": "avg_revenue", "brick": "divide"}, "unit": "bench", "verdict": "error"}
 ```
 
-Exit 1. With the three-row input from First success it prints
+Exit 3. With the three-row input from First success it prints
 `{"ok": true, "blueprint": "crm_pipeline", "unit": "bench", "verdict": "pass", "measurements": [], "outputs": {"active_count": 2, "total_active_revenue": 7300, "avg_active_revenue": 3650.0}}`.
 `measurements` is one row per `measure` step that ran (`{"step", "name", "value",
 "unit", "limits", "pass"}`), empty when the blueprint has none. A guard that

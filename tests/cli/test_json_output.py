@@ -89,7 +89,7 @@ def test_run_json_success(work: Path) -> None:
 
 def test_run_json_step_failure_names_step_and_brick(work: Path) -> None:
     result = _bricks(work, "run", "blueprints/crm_pipeline.yaml", "-i", "crm_json=[]", "--json")
-    assert result.returncode == 1
+    assert result.returncode == 3
     doc = _one_json(result)
     assert doc["ok"] is False
     assert doc["error"]["type"] == "BrickExecutionError"
@@ -111,7 +111,8 @@ def test_run_json_step_failure_names_step_and_brick(work: Path) -> None:
 )
 def test_run_json_other_failures(work: Path, args: list[str], error_type: str, reaches_engine: bool) -> None:
     result = _bricks(work, "run", *args, "--json")
-    assert result.returncode == 1
+    # verdict "error" (the run was attempted and broke) exits 3; earlier failures exit 1.
+    assert result.returncode == (3 if reaches_engine else 1)
     doc = _one_json(result)
     assert doc["ok"] is False
     assert doc["error"]["type"] == error_type
@@ -189,7 +190,7 @@ def test_run_human_output_unchanged(work: Path) -> None:
     )
     failed = _bricks(work, "run", "blueprints/crm_pipeline.yaml", "-i", "crm_json=[]")
     assert (failed.returncode, failed.stdout, failed.stderr) == (
-        1,
+        3,
         "",
         "Execution error: Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0\n"
         "Verdict: ERROR (unit bench): "
