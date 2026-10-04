@@ -1,4 +1,4 @@
-"""`bricks run` exit codes: 0 pass, 1 fail (a failing check), 2 error (a broken run) (#101)."""
+"""`bricks run` exit codes: 0 pass, 1 fail (a failing check), 2 usage, 3 error (a broken run) (#101)."""
 
 from __future__ import annotations
 
@@ -33,9 +33,9 @@ def test_failing_check_exits_1(json_flag: list[str]) -> None:
 
 
 @pytest.mark.parametrize("json_flag", [[], ["--json"]])
-def test_error_verdict_exits_2(json_flag: list[str]) -> None:
+def test_error_verdict_exits_3(json_flag: list[str]) -> None:
     result = CliRunner().invoke(app, ["run", _CRM, "-i", "crm_json=[]", *json_flag])
-    assert result.exit_code == 2, result.output
+    assert result.exit_code == 3, result.output
     if json_flag:
         payload = json.loads(result.stdout)
         assert payload["verdict"] == "error"
