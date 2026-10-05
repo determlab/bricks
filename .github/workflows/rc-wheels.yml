@@ -1,0 +1,42 @@
+name: RC wheels
+
+# Builds the wheel this repo would release, from main, on every push, and
+# saves it as a workflow artifact. Nothing is published anywhere (#104 D1).
+# This is step 1 of the release-candidate chain: a clean-machine run (shal#340)
+# installs only these artifacts, never an index, to prove what we'd actually
+# ship still works.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build bricks-engine
+        run: |
+          pip install build
+          python -m build --outdir dist
+      - name: Write rc-manifest.json
+        run: |
+          python - <<'PY'
+          import glob, json, os
+          wheel = glob.glob("dist/*.whl")[0]
+          version = os.path.basename(wheel).split("-")[1]
+          with open("dist/rc-manifest.json", "w") as f:
+              json.dump({"package": "bricks-engine", "version": version, "sha": "${{ github.sha }}"}, f)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rc-bricks-engine
+          path: dist/
+          retention-days: 30
