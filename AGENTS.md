@@ -199,3 +199,6 @@ package.
 - [src/bricks/BRICK_STYLE_GUIDE.md](src/bricks/BRICK_STYLE_GUIDE.md) — how to write a brick.
 - [CHANGELOG.md](CHANGELOG.md) — pre-1.0, the public API may change in a minor release.
 - Contributing to this repo, not using it: [docs/agents/context.md](docs/agents/context.md).
+- `.github/workflows/rc-wheels.yml` builds bricks-engine from `main` on every
+  push as artifact `rc-bricks-engine`, with a `rc-manifest.json` (`package`,
+  `version`, `sha`). Nothing is published.
