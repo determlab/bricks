@@ -46,6 +46,23 @@ policy above holds from 0.2.0 onward.
   blank unit into the verdict.
 
 ### Added
+- **Docs are tests (#105).** `tests/test_readme_commands.py` extracts every
+  `bash`/`sh` fenced command on the first screen of README.md (`## Why Bricks?`,
+  `## Install`, every `## Quick Start` section) and every `bash`/`sh` fenced
+  command in AGENTS.md, and runs each as written, in a fresh venv, with a real
+  `pip install` and the real `bricks` CLI — no mocked subprocess. `dev/quickstart/
+  run_readme.py` gains the extractor (`doc_commands`, `first_screen`,
+  `resolve_doc_commands`, `DocRunner`): unlike its existing marker-only Quick
+  Start mechanism, no marker is required — a command runs unless the nearest
+  non-blank line above its block is `<!-- doc-test: skip <reason> -->` (never
+  run) or `<!-- doc-test: main-only <reason> -->` (runs only when env
+  `RC_WHEELS` is set, so a release-candidate run still covers it); either kind
+  of skip is capped at `MAX_DOC_TEST_SKIPS` (2) so the count cannot grow
+  silently, and both are visible via `pytest -rs`. Expected output/exit code
+  come from the docs themselves (a `#`-commented line, a following plain fenced
+  block, or a `prints \`...\`.` / `Exit N.` sentence) — never retyped in the
+  test. A `pip install` line runs against `RC_WHEELS`'s wheels
+  (`--no-index --find-links`) when set, PyPI otherwise. No `src/` change.
 - **Usage errors are JSON with `--json`; `bricks --version` (#94).** A missing
   argument or unknown option with `--json` on the command line prints
   `{"ok": false, "error": {"type": "UsageError", ...}}` on stdout (exit still 2),

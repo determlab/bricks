@@ -54,6 +54,18 @@ overrides.
 to the end of the first step that shows output and passed. Printed, and appended
 to ``$GITHUB_STEP_SUMMARY`` when that is set.
 
+**Doc commands (bricks#105).** ``doc_commands()`` is a second, lenient extractor
+reused by ``tests/test_readme_commands.py``, not by this script's own ``main()``.
+Unlike ``quickstart_blocks()`` above, it needs no marker: every ``bash``/``sh``
+fenced block (plain or indented, inside a list item or not) runs unless the
+nearest non-blank line above it is ``<!-- doc-test: skip <reason> -->`` (never
+run) or ``<!-- doc-test: main-only <reason> -->`` (run only when ``RC_WHEELS``
+is set — see ``resolve_doc_commands()``). A command's expected output comes from
+whichever the docs show: ``#`` lines directly under it, a plain fenced block
+right after its block, or a following ``prints `...`.`` sentence; a following
+``Exit N.`` sentence is its expected exit code (default 0). None of that is
+retyped here — it is read out of the file each run.
+
 Usage:
     run_readme.py --venv VENV_DIR --dist DIST_DIR [--readme README.md] [--bash PATH]
 
@@ -257,6 +269,233 @@ def _run(argv: list[str], cwd: Path, env: dict[str, str]) -> tuple[int, str]:
 
 def _echo(out: str) -> None:
     print(out, end="" if out.endswith("\n") or not out else "\n")
+
+
+# --- Doc commands (bricks#105): lenient bash/sh extraction for README's first screen
+# and all of AGENTS.md, reusing everything above instead of a third mechanism. ---
+
+MAX_DOC_TEST_SKIPS = 2  # shal PR 360 started at 4; the CTO asked for 2 — a constant, not a setting.
+
+_FENCE_LENIENT = re.compile(r"^```\s*([\w-]*)\s*$")
+_DOC_SKIP = re.compile(r"^<!--\s*doc-test:\s*skip\s+(.+?)\s*-->$")
+_DOC_MAIN_ONLY = re.compile(r"^<!--\s*doc-test:\s*main-only\s+(.+?)\s*-->$")
+_EXIT_PROSE = re.compile(r"^Exit\s+(\d+)\.")
+_PRINTS_PROSE = re.compile(r"^prints?\s+`([^`]+)`")
+_CD = re.compile(r"^cd\s+(\S+)$")
+_GIT_CLONE = re.compile(r"^git clone\s+(\S+)(.*)$")
+_PIP_INSTALL = re.compile(r"^pip install\b")
+# The repo's own README/AGENTS.md install line: cloning it for real would test
+# `main`, not this commit (the same reason the wheel stands in for it above).
+KNOWN_REMOTES = {"https://github.com/determlab/bricks.git", "https://github.com/determlab/bricks"}
+
+
+class DocSkipError(Exception):
+    """A doc command is marked `<!-- doc-test: skip|main-only <reason> -->` and was not run."""
+
+
+@dataclass
+class DocCommand:
+    file: str
+    line: int  # 1-based line of the command, in *file*
+    command: str
+    expected: list[str] | None
+    expected_exit: int
+    skip_reason: str | None
+    main_only_reason: str | None
+
+
+@dataclass
+class ResolvedDocCommand:
+    file: str
+    line: int
+    command: str
+    expected: list[str] | None
+    expected_exit: int
+    skipped: str | None  # the reason it will not run, or None to run it
+
+
+def first_screen(readme: str) -> str:
+    """README text up to the first ``## `` heading that follows a ``## Quick Start`` one.
+
+    "The first screen" per bricks#105: ``## Why Bricks?``, ``## Install`` and every
+    ``## Quick Start`` section, stopping before whatever heading comes after them. A
+    README with no Quick Start heading is returned whole — ``quickstart_blocks()``
+    is what raises on that, and this function has no opinion about it.
+    """
+    lines = readme.replace("\r\n", "\n").split("\n")
+    seen_quickstart = False
+    for i, ln in enumerate(lines):
+        if ln.startswith("## "):
+            if _SECTION.match(ln):
+                seen_quickstart = True
+            elif seen_quickstart:
+                return "\n".join(lines[:i])
+    return readme
+
+
+def _attach_prose_output(lines: list[str], after: int, cmd: DocCommand) -> None:
+    """Fill *cmd*'s expected output/exit code from whatever immediately follows its block."""
+    n = len(lines)
+    peek = after
+    blanks = 0
+    while peek < n and not lines[peek].strip():
+        peek += 1
+        blanks += 1
+    if blanks <= 1 and peek < n:
+        fm = _FENCE_LENIENT.match(lines[peek].strip())
+        if fm and fm.group(1) == "":
+            j = peek + 1
+            out_body: list[str] = []
+            while j < n and lines[j].strip() != "```":
+                out_body.append(lines[j])
+                j += 1
+            if j < n:  # the output fence closed properly; an unclosed one is just prose
+                cmd.expected = list(out_body)
+                peek = j + 1
+                while peek < n and not lines[peek].strip():
+                    peek += 1
+    if peek < n:
+        prose = lines[peek].strip()
+        em = _EXIT_PROSE.match(prose)
+        if em:
+            cmd.expected_exit = int(em.group(1))
+        if cmd.expected is None:
+            pm = _PRINTS_PROSE.match(prose)
+            if pm:
+                cmd.expected = [pm.group(1)]
+
+
+def doc_commands(text: str, filename: str) -> list[DocCommand]:
+    """Every command in every ``bash``/``sh`` fenced block of *text*, in order.
+
+    Lenient, unlike ``quickstart_blocks()``: no marker is required, a fence may be
+    indented (inside a list item), and a block with no `#`-commented output picks up
+    its expected output or exit code from the prose right after it (see module
+    docstring). A block whose nearest non-blank line above it is a `doc-test` marker
+    is still returned, carrying the skip/main-only reason instead of being dropped —
+    resolving it (run or not) is `resolve_doc_commands()`'s job, since that depends on
+    `RC_WHEELS`.
+    """
+    lines = text.replace("\r\n", "\n").split("\n")
+    n = len(lines)
+    out: list[DocCommand] = []
+    last_text = ""
+    i = 0
+    while i < n:
+        stripped = lines[i].strip()
+        m = _FENCE_LENIENT.match(stripped)
+        if not m:
+            if stripped:
+                last_text = stripped
+            i += 1
+            continue
+        lang = m.group(1).lower()
+        open_line = i + 1
+        i += 1
+        body_start = i
+        while i < n and lines[i].strip() != "```":
+            i += 1
+        if i >= n:
+            raise ReadmeError(f"{filename} line {open_line}: code fence never closed")
+        body = lines[body_start:i]
+        i += 1  # consume the closing fence
+        if lang not in ("bash", "sh"):
+            last_text = "```"
+            continue
+        skip = _DOC_SKIP.match(last_text)
+        main_only = _DOC_MAIN_ONLY.match(last_text)
+        last_text = "```"
+        block: list[DocCommand] = []
+        current: DocCommand | None = None
+        for k, row in enumerate(body):
+            line_no = body_start + 1 + k
+            s = row.strip()
+            if not s:
+                current = None
+            elif s.startswith("#"):
+                if current is not None:
+                    current.expected = [*(current.expected or []), _comment(s)]
+            else:
+                current = DocCommand(
+                    file=filename,
+                    line=line_no,
+                    command=s,
+                    expected=None,
+                    expected_exit=0,
+                    skip_reason=skip.group(1).strip() if skip else None,
+                    main_only_reason=main_only.group(1).strip() if main_only else None,
+                )
+                block.append(current)
+        if len(block) == 1 and block[0].expected is None:
+            _attach_prose_output(lines, i, block[0])
+        out.extend(block)
+    return out
+
+
+def localize_git_clone(command: str, repo_root: Path) -> str:
+    """Clone this checkout instead of the network (bricks#105): the README's own
+    `git clone` line is for a stranger, not for testing the commit under test — the
+    same reason `run_quickstart()` installs a wheel instead of running it."""
+    m = _GIT_CLONE.match(command)
+    if not m or m.group(1) not in KNOWN_REMOTES:
+        return command
+    return f"git clone {repo_root}{m.group(2)}"
+
+
+def resolve_doc_commands(commands: list[DocCommand], rc_wheels: str | None) -> list[ResolvedDocCommand]:
+    """Decide what runs. `skip` never runs. `main-only` runs only when *rc_wheels* is
+    set (it needs a release PyPI does not have yet); otherwise it is skipped, visibly,
+    with its own reason. A `pip install` line runs against *rc_wheels* when set
+    (``--no-index --find-links``), against PyPI otherwise — never retyped here."""
+    out = []
+    for c in commands:
+        if c.skip_reason:
+            out.append(ResolvedDocCommand(c.file, c.line, c.command, c.expected, c.expected_exit, c.skip_reason))
+            continue
+        if c.main_only_reason and not rc_wheels:
+            out.append(ResolvedDocCommand(c.file, c.line, c.command, c.expected, c.expected_exit, c.main_only_reason))
+            continue
+        command = c.command
+        if rc_wheels and _PIP_INSTALL.match(command):
+            command = command.replace("pip install", f'pip install --no-index --find-links "{rc_wheels}"', 1)
+        out.append(ResolvedDocCommand(c.file, c.line, command, c.expected, c.expected_exit, None))
+    return out
+
+
+@dataclass
+class DocRunner:
+    """Runs resolved doc commands in order, tracking `cd` the way a reader's shell would
+    (each command is its own subprocess, so a real `cd` would not otherwise persist)."""
+
+    bash: str
+    env: dict[str, str]
+    cwd: Path
+    repo_root: Path | None = None
+
+    def run(self, cmd: ResolvedDocCommand) -> None:
+        if cmd.skipped:
+            raise DocSkipError(cmd.skipped)
+        cd = _CD.match(cmd.command)
+        if cd:
+            new_cwd = (self.cwd / cd.group(1)).resolve()
+            if not new_cwd.is_dir():
+                raise StepFailedError(f"{cmd.file}:{cmd.line}: `{cmd.command}`: no such directory {new_cwd}")
+            self.cwd = new_cwd
+            return
+        command = cmd.command
+        if self.repo_root is not None:
+            command = localize_git_clone(command, self.repo_root)
+        code, actual = _run([self.bash, "-c", command], self.cwd, self.env)
+        if code != cmd.expected_exit:
+            raise StepFailedError(
+                f"{cmd.file}:{cmd.line}: `{cmd.command}` exited {code}, the docs expect {cmd.expected_exit}\n{actual}"
+            )
+        if cmd.expected is not None and not output_matches(cmd.expected, actual):
+            diff = "\n".join(
+                difflib.unified_diff(_norm(cmd.expected), _norm(actual), "docs show", "printed", lineterm="")
+            )
+            what = f"{cmd.file}:{cmd.line}: `{cmd.command}`"
+            raise StepFailedError(f"{what} printed something other than the docs show\n{diff}")
 
 
 def run_quickstart(readme: Path, venv: Path, wheel: Path, root: Path, bash: str) -> tuple[float, int]:
