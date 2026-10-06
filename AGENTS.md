@@ -150,7 +150,7 @@ bricks run blueprints/crm_pipeline.yaml -i crm_json='[]' --json
 ```
 
 ```
-{"ok": false, "error": {"type": "BrickExecutionError", "message": "Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0", "step": "avg_revenue", "brick": "divide"}, "unit": "bench", "verdict": "error"}
+{"ok": false, "error": {"type": "BrickExecutionError", "message": "Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0", "fix": "fix the problem the message describes, then rerun: bricks run blueprints/crm_pipeline.yaml -i crm_json=[] --json", "step": "avg_revenue", "brick": "divide"}, "unit": "bench", "verdict": "error"}
 ```
 
 Exit 3. With the three-row input from First success it prints

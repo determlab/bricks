@@ -649,6 +649,19 @@ def run(
     {"ok": false, "verdict": "error", "error": {"type":
     "BlueprintValidationError", "message", "fix"}}, exit 3, zero steps run.
     """
+
+    # CTO review on #91: a fix that says "rerun" must give the full command,
+    # not just the file -- -i and a non-default --unit are part of what
+    # reproduces this exact run.
+    def _rerun_cmd() -> str:
+        parts = ["bricks", "run", sequence]
+        for item in input_:
+            parts += ["-i", item]
+        if unit != "bench":
+            parts += ["--unit", unit]
+        parts.append("--json")
+        return " ".join(parts)
+
     path = Path(sequence)
     if not path.exists():
         if json_output:
@@ -672,7 +685,7 @@ def run(
                 _json_error(
                     "YamlLoadError",
                     str(exc),
-                    f"fix the YAML syntax error above, then rerun: bricks run {sequence} --json",
+                    f"fix the YAML syntax error above, then rerun: {_rerun_cmd()}",
                 )
             )
         else:
@@ -758,12 +771,12 @@ def run(
                 fix = f"fix the errors listed in errors[] and run: bricks check {sequence} --json"
                 doc = _json_error("BlueprintValidationError", message, fix)
             elif isinstance(run_error, BrickExecutionError):
-                fix = f"fix the problem the message describes, then rerun: bricks run {sequence} --json"
+                fix = f"fix the problem the message describes, then rerun: {_rerun_cmd()}"
                 doc = _json_error(
                     type(run_error).__name__, str(run_error), fix, step=run_error.step_name, brick=run_error.brick_name
                 )
             else:
-                fix = f"fix the problem the message describes, then rerun: bricks run {sequence} --json"
+                fix = f"fix the problem the message describes, then rerun: {_rerun_cmd()}"
                 doc = _json_error(type(run_error).__name__, str(run_error), fix)
             _emit_json({**doc, "unit": unit, "verdict": verdict.status})
             raise typer.Exit(code=3)
