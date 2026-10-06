@@ -27,6 +27,12 @@ policy above holds from 0.2.0 onward.
 ## [Unreleased]
 
 ### Changed
+- **`bricks run` and `run_for_unit` validate before the first step (#87, G8).**
+  Both now run the same `BlueprintValidator` pass `bricks.run_blueprint` and
+  `bricks check`/`dry-run` already did. An invalid blueprint — an unknown
+  brick reference, say — exits 3, verdict `error`, with zero steps run,
+  instead of running every step up to the broken one first. CTO ruling:
+  "execute if it is sound."
 - **`bricks run` exits 3 when the verdict is `error` (#101).** Exit 1 stays for a
   failing check or guard (`fail`), 0 for `pass`, 2 for a usage error.
 
@@ -46,6 +52,12 @@ policy above holds from 0.2.0 onward.
   blank unit into the verdict.
 
 ### Added
+- **One `--json` failure shape (#91).** Every `--json` failure of `check`,
+  `dry-run`, `run`, `list`, usage errors (exit 2) and `check-brick`'s exit-2
+  "could not load" case now carries `error: {type, message, fix}`, with
+  `fix` always non-empty. Additive: `check` and `dry-run` keep their existing
+  `errors: [str, ...]` next to the new `error`; `check-brick` keeps
+  `problems[]`. No exit code changed.
 - **Docs are tests (#105).** `tests/test_readme_commands.py` extracts every
   `bash`/`sh` fenced command on the first screen of README.md (`## Why Bricks?`,
   `## Install`, every `## Quick Start` section) and every `bash`/`sh` fenced

@@ -223,6 +223,11 @@ class TestCheckBrickCannotImport:
         doc = json.loads(result.stdout)
         assert doc["ok"] is False
         assert doc["problems"] == []
+        # bricks#91: an exit-2 "could not load" failure gets the one shared
+        # --json error object too.
+        assert doc["error"]["type"] == "CheckBrickLoadError"
+        assert doc["error"]["message"]
+        assert doc["error"]["fix"]
 
     def test_missing_file_exits_2(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)

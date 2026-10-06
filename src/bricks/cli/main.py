@@ -10,6 +10,7 @@ import json
 import keyword
 import math
 import os
+import shlex
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -69,8 +70,9 @@ class _JsonUsageGroup(TyperGroup):
                 ctx = getattr(exc, "ctx", None)
                 cmd = ctx.command_path if ctx is not None else "bricks"
                 usage_error: Any = exc
-                message = f"{usage_error.format_message()} — run `{cmd} --help`"
-                _emit_json(_json_error("UsageError", message))
+                fix = f"run `{cmd} --help`"
+                message = f"{usage_error.format_message()} — {fix}"
+                _emit_json(_json_error("UsageError", message, fix))
             sys.exit(exc.exit_code)
         sys.exit(rv if isinstance(rv, int) else 0)
 
@@ -131,14 +133,22 @@ def _emit_json(doc: dict[str, Any]) -> None:
     typer.echo(json.dumps(_jsonable(doc), allow_nan=False))
 
 
-def _json_error(error_type: str, message: str, **extra: str) -> dict[str, Any]:
-    """The ``--json`` failure shape shared by ``run`` and ``list``."""
-    return {"ok": False, "error": {"type": error_type, "message": message, **extra}}
+def _json_error(error_type: str, message: str, fix: str, **extra: str) -> dict[str, Any]:
+    """The one ``--json`` failure shape every command shares (bricks#91 ruling):
+    ``{"ok": false, "error": {"type", "message", "fix"}}``. ``fix`` is a required,
+    non-empty argument — not a default — so a call site can never forget it."""
+    if not fix:
+        raise ValueError("fix must be a non-empty string (bricks#91 ruling)")
+    return {"ok": False, "error": {"type": error_type, "message": message, "fix": fix, **extra}}
 
 
 def _emit_config_error(error_type: str, message: str) -> None:
     """``--json`` report for a config or registry that cannot be built (``run`` and ``list``)."""
-    _emit_json(_json_error(error_type, message))
+    _emit_json(
+        _json_error(
+            error_type, message, "fix the config or registry error named above (likely in bricks.config.yaml) and rerun"
+        )
+    )
 
 
 def _setup_registry(
@@ -364,15 +374,25 @@ def check(
     """Validate a blueprint YAML file (lint without executing).
 
     With --json: {"ok", "file", "errors": [str, ...]}; exit 1 when not ok.
+    On failure, also {"error": {"type", "message", "fix"}} (bricks#91).
     """
     path = Path(file)
 
-    def fail_json(*errors: str) -> None:
-        _emit_json({"ok": False, "file": file, "errors": list(errors)})
+    def fail_json(*errors: str, error_type: str) -> None:
+        message = "; ".join(errors) if errors else "check failed"
+        fix = f"fix the errors listed in errors[] and run: bricks check {file} --json"
+        _emit_json(
+            {
+                "ok": False,
+                "file": file,
+                "errors": list(errors),
+                "error": {"type": error_type, "message": message, "fix": fix},
+            }
+        )
 
     if not path.exists():
         if json_output:
-            fail_json(f"File not found: {path}")
+            fail_json(f"File not found: {path}", error_type="FileNotFoundError")
         else:
             typer.echo(f"Error: File not found: {path}", err=True)
         raise typer.Exit(code=1)
@@ -382,19 +402,21 @@ def check(
         blueprint = bp_loader.load_file(path)
     except YamlLoadError as exc:
         if json_output:
-            fail_json(f"Error loading YAML: {exc}")
+            fail_json(f"Error loading YAML: {exc}", error_type="YamlLoadError")
         else:
             typer.echo(f"Error loading YAML: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
-    registry, _ = _setup_registry(on_error=(lambda _type, msg: fail_json(msg)) if json_output else None)
+    registry, _ = _setup_registry(
+        on_error=(lambda _type, msg: fail_json(msg, error_type=_type)) if json_output else None
+    )
     validator = BlueprintValidator(registry=registry)
 
     try:
         validator.validate(blueprint)
     except BlueprintValidationError as exc:
         if json_output:
-            fail_json(*(exc.errors or [str(exc)]))
+            fail_json(*(exc.errors or [str(exc)]), error_type="BlueprintValidationError")
             raise typer.Exit(code=1) from exc
         typer.echo(f"Validation errors in {path}:", err=True)
         if exc.errors:
@@ -544,13 +566,22 @@ def check_brick(
     Exit 0: ok. Exit 1: one or more problems, each with a ``fix``. Exit 2:
     *target* itself could not be loaded (a bad pack or an import error). With
     --json: {"ok", "target", "problems": [{"brick", "check", "fix"}]}; an
-    exit-2 failure adds "error" (a message) and "problems" stays empty.
+    exit-2 failure adds "error": {"type", "message", "fix"} and "problems"
+    stays empty.
     """
     try:
         targets = _resolve_check_targets(target)
     except CheckBrickLoadError as exc:
         if json_output:
-            _emit_json({"ok": False, "target": target, "problems": [], "error": str(exc)})
+            fix = f"fix the load problem named above in {target!r} and rerun: bricks check-brick {target} --json"
+            _emit_json(
+                {
+                    "ok": False,
+                    "target": target,
+                    "problems": [],
+                    "error": {"type": type(exc).__name__, "message": str(exc), "fix": fix},
+                }
+            )
         else:
             typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
@@ -559,7 +590,15 @@ def check_brick(
         reference_registry = build_default_registry()
     except BricksConfigError as exc:
         if json_output:
-            _emit_json({"ok": False, "target": target, "problems": [], "error": str(exc)})
+            fix = "fix the config or registry error named above (likely in bricks.config.yaml) and rerun"
+            _emit_json(
+                {
+                    "ok": False,
+                    "target": target,
+                    "problems": [],
+                    "error": {"type": type(exc).__name__, "message": str(exc), "fix": fix},
+                }
+            )
         else:
             typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=2) from exc
@@ -606,13 +645,36 @@ def run(
     With --json: {"ok": true, "blueprint", "unit", "verdict", "measurements",
     "outputs"}. A guard failure is {"ok": true, "verdict": "fail", ...} — the
     run did what it should. Any other failure keeps today's shape,
-    {"ok": false, "error": {"type", "message", "step"?, "brick"?}}, and adds
-    "unit" and "verdict".
+    {"ok": false, "error": {"type", "message", "fix", "step"?, "brick"?}}, and
+    adds "unit" and "verdict". An invalid blueprint fails before step 1:
+    {"ok": false, "verdict": "error", "error": {"type":
+    "BlueprintValidationError", "message", "fix"}}, exit 3, zero steps run.
     """
+
+    # CTO review on #91: a fix that says "rerun" must give the full command,
+    # not just the file -- -i and a non-default --unit are part of what
+    # reproduces this exact run. shlex.join (not a bare " ".join): an -i value
+    # like "crm_json=[]" needs its shell quoting kept, or pasting the rerun
+    # line back into a shell does not pass the same argv it names.
+    def _rerun_cmd() -> str:
+        parts = ["bricks", "run", sequence]
+        for item in input_:
+            parts += ["-i", item]
+        if unit != "bench":
+            parts += ["--unit", unit]
+        parts.append("--json")
+        return shlex.join(parts)
+
     path = Path(sequence)
     if not path.exists():
         if json_output:
-            _emit_json(_json_error("FileNotFoundError", f"Blueprint file not found: {path}"))
+            _emit_json(
+                _json_error(
+                    "FileNotFoundError",
+                    f"Blueprint file not found: {path}",
+                    "pass a path to a blueprint YAML file that exists",
+                )
+            )
         else:
             typer.echo(f"Error: Blueprint file not found: {path}", err=True)
         raise typer.Exit(code=1)
@@ -622,7 +684,13 @@ def run(
         bp_def = bp_loader.load_file(path)
     except YamlLoadError as exc:
         if json_output:
-            _emit_json(_json_error("YamlLoadError", str(exc)))
+            _emit_json(
+                _json_error(
+                    "YamlLoadError",
+                    str(exc),
+                    f"fix the YAML syntax error above, then rerun: {_rerun_cmd()}",
+                )
+            )
         else:
             typer.echo(f"Error loading YAML: {exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -630,7 +698,11 @@ def run(
     if not unit.strip():
         blank_msg = "--unit must not be blank (leave it out for 'bench')"
         if json_output:
-            _emit_json(_json_error("InvalidInputError", blank_msg))
+            _emit_json(
+                _json_error(
+                    "InvalidInputError", blank_msg, "drop --unit (defaults to 'bench') or give it a non-blank value"
+                )
+            )
         else:
             typer.echo(f"Error: {blank_msg}", err=True)
         raise typer.Exit(code=1)
@@ -639,7 +711,13 @@ def run(
     for item in input_:
         if "=" not in item:
             if json_output:
-                _emit_json(_json_error("InvalidInputError", f"Invalid input format {item!r}. Use key=value."))
+                _emit_json(
+                    _json_error(
+                        "InvalidInputError",
+                        f"Invalid input format {item!r}. Use key=value.",
+                        "use key=value for every --input, e.g. --input foo=1",
+                    )
+                )
             else:
                 typer.echo(f"Error: Invalid input format {item!r}. Use key=value.", err=True)
             raise typer.Exit(code=1)
@@ -689,12 +767,20 @@ def run(
             raise typer.Exit(code=1)
         if exec_result is None:
             # Any other BrickError keeps the `ok: false` shape plus "unit" and "verdict".
-            if isinstance(run_error, BrickExecutionError):
+            if isinstance(run_error, BlueprintValidationError):
+                # G8/#87: the blueprint never reached step 1. Same text as
+                # `bricks check --json`'s errors[], joined into one message.
+                message = "; ".join(run_error.errors or [str(run_error)])
+                fix = f"fix the errors listed in errors[] and run: bricks check {sequence} --json"
+                doc = _json_error("BlueprintValidationError", message, fix)
+            elif isinstance(run_error, BrickExecutionError):
+                fix = f"fix the problem the message describes, then rerun: {_rerun_cmd()}"
                 doc = _json_error(
-                    type(run_error).__name__, str(run_error), step=run_error.step_name, brick=run_error.brick_name
+                    type(run_error).__name__, str(run_error), fix, step=run_error.step_name, brick=run_error.brick_name
                 )
             else:
-                doc = _json_error(type(run_error).__name__, str(run_error))
+                fix = f"fix the problem the message describes, then rerun: {_rerun_cmd()}"
+                doc = _json_error(type(run_error).__name__, str(run_error), fix)
             _emit_json({**doc, "unit": unit, "verdict": verdict.status})
             raise typer.Exit(code=3)
         _emit_json(
@@ -755,15 +841,28 @@ def dry_run(
     """Validate a blueprint without executing (dry run).
 
     With --json: {"ok", "file", "errors": [str, ...]}; exit 1 when not ok.
+    On failure, also {"error": {"type", "message", "fix"}} (bricks#91).
     """
     path = Path(sequence)
 
-    def fail_json(*errors: str) -> None:
-        _emit_json({"ok": False, "file": sequence, "errors": list(errors)})
+    def fail_json(*errors: str, error_type: str) -> None:
+        message = "; ".join(errors) if errors else "dry-run failed"
+        # Same wording as `check`'s own fail_json (#81: dry-run and check share
+        # one failure shape) -- `bricks check` is the canonical re-validate
+        # command either way, so the fix always names it, never `dry-run`.
+        fix = f"fix the errors listed in errors[] and run: bricks check {sequence} --json"
+        _emit_json(
+            {
+                "ok": False,
+                "file": sequence,
+                "errors": list(errors),
+                "error": {"type": error_type, "message": message, "fix": fix},
+            }
+        )
 
     if not path.exists():
         if json_output:
-            fail_json(f"File not found: {path}")
+            fail_json(f"File not found: {path}", error_type="FileNotFoundError")
         else:
             typer.echo(f"Error: Blueprint file not found: {path}", err=True)
         raise typer.Exit(code=1)
@@ -773,12 +872,14 @@ def dry_run(
         bp_def = bp_loader.load_file(path)
     except YamlLoadError as exc:
         if json_output:
-            fail_json(f"Error loading YAML: {exc}")
+            fail_json(f"Error loading YAML: {exc}", error_type="YamlLoadError")
         else:
             typer.echo(f"Error loading YAML: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
-    registry, _ = _setup_registry(on_error=(lambda _type, msg: fail_json(msg)) if json_output else None)
+    registry, _ = _setup_registry(
+        on_error=(lambda _type, msg: fail_json(msg, error_type=_type)) if json_output else None
+    )
     validator = BlueprintValidator(registry=registry)
 
     try:
@@ -789,7 +890,7 @@ def dry_run(
             typer.echo(f"Blueprint {bp_def.name!r} is valid (dry-run passed).")
     except BlueprintValidationError as exc:
         if json_output:
-            fail_json(*(exc.errors or [str(exc)]))
+            fail_json(*(exc.errors or [str(exc)]), error_type="BlueprintValidationError")
             raise typer.Exit(code=1) from exc
         typer.echo("Validation errors:", err=True)
         if exc.errors:

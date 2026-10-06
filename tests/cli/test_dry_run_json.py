@@ -73,6 +73,8 @@ def test_missing_file(tmp_path: Path) -> None:
     assert doc["file"] == missing
     assert len(doc["errors"]) == 1
     assert "File not found" in doc["errors"][0]
+    assert doc["error"]["type"] == "FileNotFoundError"
+    assert doc["error"]["fix"]
 
 
 def test_bad_yaml(tmp_path: Path) -> None:

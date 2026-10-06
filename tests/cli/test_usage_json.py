@@ -24,7 +24,8 @@ def test_usage_error_is_json_with_json_flag(args: list[str]) -> None:
     assert doc["ok"] is False
     assert doc["error"]["type"] == "UsageError"
     assert "--help" in doc["error"]["message"]
-    assert "fix" not in doc["error"]
+    assert doc["error"]["fix"]  # bricks#91: every --json failure carries a non-empty fix
+    assert "--help" in doc["error"]["fix"]
 
 
 @pytest.mark.parametrize("args", [["run"], ["check"], ["run", "x.yaml", "--bogus"]])
