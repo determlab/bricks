@@ -274,7 +274,7 @@ def _echo(out: str) -> None:
 # --- Doc commands (bricks#105): lenient bash/sh extraction for README's first screen
 # and all of AGENTS.md, reusing everything above instead of a third mechanism. ---
 
-MAX_DOC_TEST_SKIPS = 2  # shal PR 360 started at 4; the CTO asked for 2 — a constant, not a setting.
+MAX_DOC_TEST_SKIPS = 0  # the shal 372 rule: this is the real current skip count, not a budget.
 
 _FENCE_LENIENT = re.compile(r"^```\s*([\w-]*)\s*$")
 _DOC_SKIP = re.compile(r"^<!--\s*doc-test:\s*skip\s+(.+?)\s*-->$")
@@ -435,18 +435,30 @@ def doc_commands(text: str, filename: str) -> list[DocCommand]:
 def localize_git_clone(command: str, repo_root: Path) -> str:
     """Clone this checkout instead of the network (bricks#105): the README's own
     `git clone` line is for a stranger, not for testing the commit under test — the
-    same reason `run_quickstart()` installs a wheel instead of running it."""
+    same reason `run_quickstart()` installs a wheel instead of running it.
+
+    Quoted and posix-ified: run through ``bash -c``, an unquoted Windows path's
+    backslashes are shell escapes, not separators, and `git clone` would get a
+    mangled path. The explicit `bricks` destination is what `cd bricks` next expects,
+    not left to git's own guess from the (now local, not ``.git``-suffixed) path.
+    """
     m = _GIT_CLONE.match(command)
     if not m or m.group(1) not in KNOWN_REMOTES:
         return command
-    return f"git clone {repo_root}{m.group(2)}"
+    return f'git clone "{repo_root.as_posix()}" bricks{m.group(2)}'
+
+
+DIST_NAME = "bricks-engine"  # pyproject.toml's [project].name — what the rc wheel is named
+_PIP_INSTALL_EDITABLE = re.compile(r"^pip install\s+-e\s+\S+")
 
 
 def resolve_doc_commands(commands: list[DocCommand], rc_wheels: str | None) -> list[ResolvedDocCommand]:
     """Decide what runs. `skip` never runs. `main-only` runs only when *rc_wheels* is
     set (it needs a release PyPI does not have yet); otherwise it is skipped, visibly,
     with its own reason. A `pip install` line runs against *rc_wheels* when set
-    (``--no-index --find-links``), against PyPI otherwise — never retyped here."""
+    (``--no-index --find-links``), against PyPI otherwise — never retyped here.
+    `-e .` has no build backend to fall back on under ``--no-index``, so under
+    *rc_wheels* it installs the rc wheel by name instead of the checkout path."""
     out = []
     for c in commands:
         if c.skip_reason:
@@ -456,7 +468,9 @@ def resolve_doc_commands(commands: list[DocCommand], rc_wheels: str | None) -> l
             out.append(ResolvedDocCommand(c.file, c.line, c.command, c.expected, c.expected_exit, c.main_only_reason))
             continue
         command = c.command
-        if rc_wheels and _PIP_INSTALL.match(command):
+        if rc_wheels and _PIP_INSTALL_EDITABLE.match(command):
+            command = f'pip install --no-index --find-links "{rc_wheels}" {DIST_NAME}'
+        elif rc_wheels and _PIP_INSTALL.match(command):
             command = command.replace("pip install", f'pip install --no-index --find-links "{rc_wheels}"', 1)
         out.append(ResolvedDocCommand(c.file, c.line, command, c.expected, c.expected_exit, None))
     return out
