@@ -10,6 +10,7 @@ import json
 import keyword
 import math
 import os
+import shlex
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -652,7 +653,9 @@ def run(
 
     # CTO review on #91: a fix that says "rerun" must give the full command,
     # not just the file -- -i and a non-default --unit are part of what
-    # reproduces this exact run.
+    # reproduces this exact run. shlex.join (not a bare " ".join): an -i value
+    # like "crm_json=[]" needs its shell quoting kept, or pasting the rerun
+    # line back into a shell does not pass the same argv it names.
     def _rerun_cmd() -> str:
         parts = ["bricks", "run", sequence]
         for item in input_:
@@ -660,7 +663,7 @@ def run(
         if unit != "bench":
             parts += ["--unit", unit]
         parts.append("--json")
-        return " ".join(parts)
+        return shlex.join(parts)
 
     path = Path(sequence)
     if not path.exists():
