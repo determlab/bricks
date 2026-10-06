@@ -42,6 +42,22 @@ jobs:
       - run: bricks --help
       - run: pytest
 
+  doc-test-windows:
+    # bricks#105 D3, found by review on PR #107 (not by CI): the `test` job
+    # above already runs tests/test_readme_commands.py (the doc test), but
+    # only on ubuntu-latest. Buyer line 1 is Windows, where the doc test's
+    # own git-clone path handling needed a fix (quoted Path.as_posix(), no
+    # bare backslashes) -- run the doc test there too (bricks#108), so a
+    # Windows regression fails here instead of only being found by review.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: pytest tests/test_readme_commands.py -q
+
   quickstart:
     # The README's Quick Start, run exactly as printed, the way a stranger runs
     # it (#41, the shal#159 check): a clean venv, then the README's own blocks,
