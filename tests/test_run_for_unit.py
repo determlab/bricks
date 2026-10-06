@@ -83,7 +83,10 @@ def test_wrapped_guard_failure_is_still_fail(monkeypatch) -> None:  # type: igno
         raise wrapper
 
     monkeypatch.setattr("bricks.outcome.BlueprintEngine.run", _boom)
-    out = run_for_unit(_GUARDED_YAML)
+    # #87: run_for_unit now validates before engine.run() -- is_within is not
+    # a stdlib brick, so the default registry would fail validation before
+    # _boom ever got a chance to run.
+    out = run_for_unit(_GUARDED_YAML, registry=_registry_with_is_within())
     assert out.verdict.status == "fail"
 
     chained = BrickExecutionError("is_within", "check", ValueError("x"))
@@ -93,7 +96,7 @@ def test_wrapped_guard_failure_is_still_fail(monkeypatch) -> None:  # type: igno
         raise chained
 
     monkeypatch.setattr("bricks.outcome.BlueprintEngine.run", _boom2)
-    assert run_for_unit(_GUARDED_YAML).verdict.status == "fail"
+    assert run_for_unit(_GUARDED_YAML, registry=_registry_with_is_within()).verdict.status == "fail"
 
 
 def test_missing_file_is_error_naming_the_path(tmp_path: Path) -> None:

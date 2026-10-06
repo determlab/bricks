@@ -102,31 +102,53 @@ def test_run_json_step_failure_names_step_and_brick(work: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("args", "error_type", "reaches_engine"),
+    ("args", "error_type", "reaches_run_for_unit"),
     [
         (["missing.yaml"], "FileNotFoundError", False),
         (["blueprints/crm_pipeline.yaml", "-i", "novalue"], "InvalidInputError", False),
-        (["bad.yaml"], "BrickNotFoundError", True),
+        # G8/#87: bad.yaml's unknown brick is now caught by validation, before
+        # the engine runs at all -- BlueprintValidationError, not the
+        # BrickNotFoundError the engine itself used to raise reaching it.
+        (["bad.yaml"], "BlueprintValidationError", True),
     ],
 )
-def test_run_json_other_failures(work: Path, args: list[str], error_type: str, reaches_engine: bool) -> None:
+def test_run_json_other_failures(work: Path, args: list[str], error_type: str, reaches_run_for_unit: bool) -> None:
     result = _bricks(work, "run", *args, "--json")
-    # verdict "error" (the run was attempted and broke) exits 3; earlier failures exit 1.
-    assert result.returncode == (3 if reaches_engine else 1)
+    # verdict "error" (run_for_unit was reached and returned one) exits 3;
+    # earlier failures (never reach run_for_unit) exit 1.
+    assert result.returncode == (3 if reaches_run_for_unit else 1)
     doc = _one_json(result)
     assert doc["ok"] is False
     assert doc["error"]["type"] == error_type
     assert doc["error"]["message"]
+    assert doc["error"]["fix"]
     assert "step" not in doc["error"]
-    # "unit"/"verdict" only make sense once a run was attempted (bad.yaml fails
-    # inside engine.run() on the unknown brick); a failure before that — a
-    # missing file or a bad -i — never touches the engine.
-    if reaches_engine:
+    # "unit"/"verdict" only make sense once run_for_unit was reached; a
+    # failure before that -- a missing file or a bad -i -- never calls it.
+    if reaches_run_for_unit:
         assert doc["unit"] == "bench"
         assert doc["verdict"] == "error"
     else:
         assert "unit" not in doc
         assert "verdict" not in doc
+
+
+def test_run_json_invalid_blueprint_runs_zero_steps(work: Path) -> None:
+    """bricks#87 (G8): an invalid blueprint stops before step 1 -- exit 3,
+    verdict error, the same error text bricks check --json would show."""
+    result = _bricks(work, "run", "bad.yaml", "--json")
+    assert result.returncode == 3
+    doc = _one_json(result)
+    assert doc == {
+        "ok": False,
+        "error": {
+            "type": "BlueprintValidationError",
+            "message": "Step 's': brick 'nope' not found in registry",
+            "fix": "fix the errors listed in errors[] and run: bricks check bad.yaml --json",
+        },
+        "unit": "bench",
+        "verdict": "error",
+    }
 
 
 def test_run_json_yaml_error(work: Path) -> None:
@@ -238,13 +260,27 @@ def test_check_json_invalid(work: Path) -> None:
         "ok": False,
         "file": "bad.yaml",
         "errors": ["Step 's': brick 'nope' not found in registry"],
+        "error": {
+            "type": "BlueprintValidationError",
+            "message": "Step 's': brick 'nope' not found in registry",
+            "fix": "fix the errors listed in errors[] and run: bricks check bad.yaml --json",
+        },
     }
 
 
 def test_check_json_missing_file(work: Path) -> None:
     result = _bricks(work, "check", "missing.yaml", "--json")
     assert result.returncode == 1
-    assert _one_json(result) == {"ok": False, "file": "missing.yaml", "errors": ["File not found: missing.yaml"]}
+    assert _one_json(result) == {
+        "ok": False,
+        "file": "missing.yaml",
+        "errors": ["File not found: missing.yaml"],
+        "error": {
+            "type": "FileNotFoundError",
+            "message": "File not found: missing.yaml",
+            "fix": "fix the errors listed in errors[] and run: bricks check missing.yaml --json",
+        },
+    }
 
 
 def test_check_json_yaml_error(work: Path) -> None:
@@ -256,6 +292,9 @@ def test_check_json_yaml_error(work: Path) -> None:
     assert doc["file"] == "broken.yaml"
     assert len(doc["errors"]) == 1
     assert doc["errors"][0].startswith("Error loading YAML: ")
+    assert doc["error"]["type"] == "YamlLoadError"
+    assert doc["error"]["message"] == doc["errors"][0]
+    assert doc["error"]["fix"]
 
 
 def test_check_human_output_unchanged(work: Path) -> None:
@@ -425,7 +464,11 @@ def _no_packs() -> Any:
     raise BricksConfigError("No brick packs are installed.")
 
 
-_NO_PACKS = {"type": "BricksConfigError", "message": "No brick packs are installed."}
+_NO_PACKS = {
+    "type": "BricksConfigError",
+    "message": "No brick packs are installed.",
+    "fix": "fix the config or registry error named above (likely in bricks.config.yaml) and rerun",
+}
 
 
 @pytest.mark.parametrize(
@@ -435,7 +478,17 @@ _NO_PACKS = {"type": "BricksConfigError", "message": "No brick packs are install
         (["run", "blueprints/crm_pipeline.yaml", "--json"], {"ok": False, "error": _NO_PACKS}),
         (
             ["check", "blueprints/crm_pipeline.yaml", "--json"],
-            {"ok": False, "file": "blueprints/crm_pipeline.yaml", "errors": ["No brick packs are installed."]},
+            {
+                "ok": False,
+                "file": "blueprints/crm_pipeline.yaml",
+                "errors": ["No brick packs are installed."],
+                "error": {
+                    "type": "BricksConfigError",
+                    "message": "No brick packs are installed.",
+                    "fix": "fix the errors listed in errors[] and run: "
+                    "bricks check blueprints/crm_pipeline.yaml --json",
+                },
+            },
         ),
     ],
 )

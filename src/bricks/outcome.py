@@ -19,6 +19,7 @@ from bricks.core.exceptions import BrickError, GuardFailedError, MissingInputErr
 from bricks.core.loader import BlueprintLoader
 from bricks.core.models import BlueprintDefinition, ExecutionResult, Verbosity
 from bricks.core.registry import BrickRegistry
+from bricks.core.validation import BlueprintValidator
 from bricks.verdict import Verdict, derive_verdict, verdict_for_error, verdict_for_guard_failure
 
 
@@ -77,8 +78,11 @@ def run_for_unit(
 ) -> RunOutcome:
     """Run a blueprint for *unit* and return its verdict. Never raises on a failing run.
 
-    Like ``bricks run``, this does not validate first; a missing brick ends
-    the run as ``error`` when its step is reached.
+    Validates the blueprint before the first step (G8, #87): an invalid
+    blueprint — an unknown brick reference, say — ends the run as ``error``
+    with zero steps executed, the same ``BlueprintValidator`` pass
+    :func:`bricks.api.run_blueprint` already runs, never reaching a brick
+    that might drive hardware.
 
     Args:
         source: A blueprint file path, a YAML string (anything with a newline),
@@ -114,6 +118,7 @@ def run_for_unit(
         if missing:
             raise MissingInputError(missing)
         reg = registry if registry is not None else build_default_registry()
+        BlueprintValidator(registry=reg).validate(blueprint)
         result = BlueprintEngine(registry=reg).run(blueprint, inputs=inputs or None, verbosity=run_verbosity)
     except BrickError as exc:
         return _outcome_from_error(unit, exc)

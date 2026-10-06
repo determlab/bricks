@@ -44,10 +44,12 @@ Verdict: PASS (unit bench)
 
 Exit 0. The numbers never change between runs. The CLI loads every installed brick
 pack (the stdlib included) with no config: `bricks list` prints
-`Registered bricks (104):`. `bricks run` does not validate before it runs
-([G8 in docs/DECISIONS.md](docs/DECISIONS.md)), so run `bricks check <file>` first.
+`Registered bricks (104):`. `bricks run` validates the blueprint before the
+first step ([G8 in docs/DECISIONS.md](docs/DECISIONS.md), decided O3): an
+invalid blueprint exits 3 with zero steps run, the same errors `bricks check
+<file>` would show.
 
-The same run through the Python API, which validates, then runs:
+The same run through the Python API:
 
 ```bash
 python -c "import json, bricks; rows = [dict(name='Acme', status='active', monthly_revenue=4200), dict(name='Globex', status='churned', monthly_revenue=1800), dict(name='Initech', status='active', monthly_revenue=3100)]; print(bricks.run_blueprint('blueprints/crm_pipeline.yaml', inputs={'crm_json': json.dumps(rows)}).outputs)"
@@ -92,6 +94,8 @@ Verdict: FAIL (unit SN-2): vout 4.7 V not in [4.9, 5.1]
 Exit 1. `--json` on either command adds `"verdict"`, `"unit"` and one row per
 `measure` step in `"measurements"`, each with its `"pass"`.
 
+Every `--json` failure has `error.type`, `error.message` and `error.fix` (bricks#91); `check` and `dry-run` also keep `errors: [str, ...]` alongside it.
+
 ## How an agent calls it
 
 From Python:
@@ -102,7 +106,7 @@ From Python:
   names the step and the brick:
   `Brick 'divide' failed at step 'avg_revenue': Division by zero: b must not be 0`
   (the example above with `inputs={'crm_json': '[]'}`).
-- `bricks.run_for_unit(path_or_yaml, inputs={...}, unit="SN-1")` — run for a unit and return a `RunOutcome` (`.verdict.status` is `pass`, `fail` or `error`; `.model_dump_json()` for JSON); never raises on a failing run. It does not validate first, like `bricks run`.
+- `bricks.run_for_unit(path_or_yaml, inputs={...}, unit="SN-1")` — run for a unit and return a `RunOutcome` (`.verdict.status` is `pass`, `fail` or `error`; `.model_dump_json()` for JSON); never raises on a failing run. Validates first, like `bricks run` (G8): an invalid blueprint is `.verdict.status == "error"` with zero steps run.
 - `bricks.build_default_registry()` — every installed brick (stdlib plus any pack).
 - The catalog as data, one dict per brick (name, description, parameters,
   output_keys, destructive, idempotent):
