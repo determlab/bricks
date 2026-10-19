@@ -158,3 +158,7 @@ These are the `commands:` block in `.agent-loop.yml`, and they match
   `[Unreleased]` (D10).
 - If the work would settle, contradict, or supersede a `D#`, or would close a
   `G#` that an `O#` still governs — stop and say so. That is the founder's call.
+
+## Packaging check
+
+CI job `packaging` (`.github/workflows/ci.yml`) builds the wheel and checks that, not the source tree: `ci/check_packaging.py` fails when `src/` imports a third-party module at module scope that the wheel's `Requires-Dist` does not declare, or when a `Requires-Dist` entry has no upper bound (names in `ci/unbounded_ok.txt` are exempt, with a reason). Then the wheel is installed in a fresh venv without `[dev]` and `import bricks` must work. It guards the case a green test suite cannot: a checkout with `[dev]` installed passes while a real install crashes. Run it locally: `python -m build && python ci/check_packaging.py --json`; each problem names the package and the line of `pyproject.toml` to change.

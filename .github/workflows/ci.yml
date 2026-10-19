@@ -93,3 +93,25 @@ jobs:
       - name: README Quick Start, as printed
         shell: bash
         run: python dev/quickstart/run_readme.py --venv "${{ runner.temp }}/quickstart-venv" --dist dist
+
+  packaging:
+    # bricks#25: check the built artifact, not the source. A green `test` job runs
+    # a checkout with [dev] installed; it cannot see a runtime import that
+    # Requires-Dist does not declare, or a dependency with no upper bound.
+    # ci/check_packaging.py reads the wheel; the last step installs it without
+    # [dev] in a fresh venv and imports it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - run: python ci/check_packaging.py
+      - name: Fresh venv, wheel only, import
+        run: |
+          python -m venv "${{ runner.temp }}/pkg-venv"
+          "${{ runner.temp }}/pkg-venv/bin/pip" install dist/*.whl
+          "${{ runner.temp }}/pkg-venv/bin/python" -c "import bricks"
